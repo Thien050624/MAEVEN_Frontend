@@ -5,17 +5,10 @@ import {
   ChevronRight, Star, Edit3, Plus, Check, Award
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { products } from "../../data/products";
 import { ProductCard } from "../ProductCard";
+import { fetchMyOrders, type OrderDto } from "../../api/ordersApi";
 
 type Tab = "overview" | "orders" | "wishlist" | "addresses" | "payment" | "notifications" | "settings";
-
-const mockOrders = [
-  { id: "MAE-184523", date: "May 28, 2026", status: "Delivered", items: 2, total: 334, image: products[0].images[0] },
-  { id: "MAE-173891", date: "May 10, 2026", status: "In Transit", items: 1, total: 165, image: products[2].images[0] },
-  { id: "MAE-162047", date: "April 18, 2026", status: "Delivered", items: 3, total: 529, image: products[4].images[0] },
-  { id: "MAE-151234", date: "March 30, 2026", status: "Delivered", items: 1, total: 189, image: products[0].images[0] },
-];
 
 const statusColors: Record<string, string> = {
   Delivered: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400",
@@ -37,12 +30,40 @@ const navItems: { id: Tab; icon: typeof User; label: string }[] = [
 export function AccountDashboard() {
   const { user, logout, navigate, wishlist, pageParams, toast } = useApp();
   const [tab, setTab] = useState<Tab>((pageParams.tab as Tab) || "overview");
+  const [orders, setOrders] = useState<OrderDto[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
   useEffect(() => {
     if (!user) {
       navigate("auth");
     }
   }, [user, navigate]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("maeven_token");
+    if (!token || !user) {
+      setOrders([]);
+      return;
+    }
+
+    let cancelled = false;
+    setOrdersLoading(true);
+    fetchMyOrders(token)
+      .then((data) => {
+        if (!cancelled) setOrders(data);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!cancelled) toast("Could not load your orders", "error");
+      })
+      .finally(() => {
+        if (!cancelled) setOrdersLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, toast]);
 
   if (!user) {
     return null;
@@ -110,7 +131,7 @@ export function AccountDashboard() {
                 {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {[
-                    { label: "Total Orders", value: "12", icon: Package },
+                    { label: "Total Orders", value: orders.length.toString(), icon: Package },
                     { label: "Wishlist Items", value: wishlist.length.toString(), icon: Heart },
                     { label: "Loyalty Points", value: "3,240", icon: Award },
                     { label: "Reviews Given", value: "7", icon: Star },
@@ -132,19 +153,24 @@ export function AccountDashboard() {
                     <button onClick={() => setTab("orders")} className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">View All</button>
                   </div>
                   <div className="space-y-4">
-                    {mockOrders.slice(0, 3).map((order) => (
+                    {orders.slice(0, 3).map((order) => (
                       <div key={order.id} className="flex items-center gap-4 p-3 rounded-xl hover:bg-[var(--accent)] transition-colors">
-                        <img src={order.image} alt="" className="w-12 h-14 rounded-xl object-cover" />
+                        <img src={order.items[0]?.productImage} alt="" className="w-12 h-14 rounded-xl object-cover bg-[var(--accent)]" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold font-mono">{order.id}</p>
-                          <p className="text-xs text-[var(--muted-foreground)]">{order.date} · {order.items} item{order.items > 1 ? "s" : ""}</p>
+                          <p className="text-xs text-[var(--muted-foreground)]">
+                            {new Date(order.createdAt).toLocaleDateString()} · {order.items.length} item{order.items.length > 1 ? "s" : ""}
+                          </p>
                         </div>
                         <div className="text-right">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[order.status]}`}>{order.status}</span>
-                          <p className="text-sm font-bold mt-1">${order.total}</p>
+                          <p className="text-sm font-bold mt-1">${order.total.toFixed(2)}</p>
                         </div>
                       </div>
                     ))}
+                    {!ordersLoading && orders.length === 0 && (
+                      <p className="text-sm text-[var(--muted-foreground)] py-6 text-center">No orders yet.</p>
+                    )}
                   </div>
                 </div>
 
@@ -175,22 +201,25 @@ export function AccountDashboard() {
               <div>
                 <h2 className="text-xl font-black mb-6">Order History</h2>
                 <div className="space-y-4">
-                  {mockOrders.map((order) => (
+                  {orders.map((order) => (
                     <div key={order.id} className="bg-[var(--card)] rounded-2xl p-5">
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <p className="font-bold font-mono">{order.id}</p>
-                          <p className="text-sm text-[var(--muted-foreground)]">{order.date}</p>
+                          <p className="text-sm text-[var(--muted-foreground)]">{new Date(order.createdAt).toLocaleString()}</p>
                         </div>
                         <span className={`text-xs px-3 py-1 rounded-full font-semibold ${statusColors[order.status]}`}>
                           {order.status}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 border-t border-[var(--border)] pt-4">
-                        <img src={order.image} alt="" className="w-16 h-20 rounded-xl object-cover" />
+                        <img src={order.items[0]?.productImage} alt="" className="w-16 h-20 rounded-xl object-cover bg-[var(--accent)]" />
                         <div className="flex-1">
-                          <p className="text-sm text-[var(--muted-foreground)]">{order.items} item{order.items > 1 ? "s" : ""}</p>
-                          <p className="font-bold text-lg">${order.total}</p>
+                          <p className="text-sm text-[var(--muted-foreground)]">{order.items.length} item{order.items.length > 1 ? "s" : ""}</p>
+                          <p className="font-bold text-lg">${order.total.toFixed(2)}</p>
+                          <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                            {order.paymentMethod === "qr" ? "Bank QR Transfer" : "Cash on Delivery"} · {order.paymentStatus}
+                          </p>
                         </div>
                         <div className="flex flex-col gap-2">
                           <button className="px-4 py-2 text-xs font-medium border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors">
@@ -205,6 +234,16 @@ export function AccountDashboard() {
                       </div>
                     </div>
                   ))}
+                  {!ordersLoading && orders.length === 0 && (
+                    <div className="text-center py-16 bg-[var(--card)] rounded-2xl">
+                      <Package size={48} className="text-[var(--border)] mx-auto mb-4" />
+                      <p className="font-bold text-lg mb-2">No orders yet</p>
+                      <p className="text-[var(--muted-foreground)] text-sm mb-6">Your completed checkouts will appear here.</p>
+                      <button onClick={() => navigate("listing", {})} className="px-6 py-3 bg-[var(--foreground)] text-[var(--background)] rounded-xl font-semibold text-sm">
+                        Browse Products
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, Banknote, Check, ChevronRight, Lock, Package, QrCode, Truck } from "lucide-react";
 import { useApp } from "../../context/AppContext";
+import { createOrder, type OrderDto } from "../../api/ordersApi";
 
 type Step = "shipping" | "delivery" | "payment" | "confirmation";
 type PaymentMethod = "qr" | "cod";
@@ -40,7 +41,7 @@ function formatVietnamPhone(value: string) {
 }
 
 export function CheckoutPage() {
-  const { cartItems, cartTotal, clearCart, navigate, user } = useApp();
+  const { cartItems, cartTotal, clearCart, navigate, user, toast } = useApp();
   const [step, setStep] = useState<Step>("shipping");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("qr");
   const [form, setForm] = useState({
@@ -53,19 +54,54 @@ export function CheckoutPage() {
   });
   const [delivery, setDelivery] = useState("standard");
   const [orderPlaced, setOrderPlaced] = useState(false);
-  const orderId = `MAE-${Math.floor(100000 + Math.random() * 900000)}`;
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [placedOrder, setPlacedOrder] = useState<OrderDto | null>(null);
+  const orderId = placedOrder?.id ?? `MAE-${Math.floor(100000 + Math.random() * 900000)}`;
 
   const shippingCost = delivery === "express" ? 15 : delivery === "same-day" ? 30 : cartTotal >= 150 ? 0 : 8;
   const tax = cartTotal * 0.08;
   const total = cartTotal + shippingCost + tax;
   const currentStepIdx = steps.indexOf(step);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const nextIdx = currentStepIdx + 1;
-    if (nextIdx < steps.length) setStep(steps[nextIdx]);
-    if (steps[nextIdx] === "confirmation") {
+    const nextStep = steps[nextIdx];
+
+    if (nextStep !== "confirmation") {
+      if (nextIdx < steps.length) setStep(nextStep);
+      return;
+    }
+
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      toast("Please sign in before placing your order", "info");
+      navigate("auth", { mode: "login" });
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      toast("Your cart is empty", "error");
+      navigate("cart");
+      return;
+    }
+
+    try {
+      setPlacingOrder(true);
+      const order = await createOrder(token, {
+        shippingAddress: form,
+        deliveryMethod: delivery,
+        paymentMethod,
+        items: cartItems,
+      });
+      setPlacedOrder(order);
       setOrderPlaced(true);
       clearCart();
+      setStep("confirmation");
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not place order", "error");
+    } finally {
+      setPlacingOrder(false);
     }
   };
 
@@ -133,15 +169,15 @@ export function CheckoutPage() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-[var(--muted-foreground)]">Estimated Delivery</span>
-              <span className="font-semibold">2-4 business days</span>
+              <span className="font-semibold">{placedOrder?.deliveryMethod === "express" ? "24-48 hours" : placedOrder?.deliveryMethod === "same-day" ? "Same day" : "2-4 business days"}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-[var(--muted-foreground)]">Payment Method</span>
-              <span className="font-semibold">{paymentMethod === "qr" ? "Bank QR Transfer" : "Cash on Delivery"}</span>
+              <span className="font-semibold">{(placedOrder?.paymentMethod ?? paymentMethod) === "qr" ? "Bank QR Transfer" : "Cash on Delivery"}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-[var(--muted-foreground)]">Total</span>
-              <span className="font-bold text-lg">${total.toFixed(2)}</span>
+              <span className="font-bold text-lg">${(placedOrder?.total ?? total).toFixed(2)}</span>
             </div>
           </div>
           <div className="flex flex-col gap-3">
@@ -374,9 +410,16 @@ export function CheckoutPage() {
 
                   <button
                     onClick={handleNext}
+                    disabled={placingOrder}
                     className="w-full py-4 bg-[var(--foreground)] text-[var(--background)] rounded-2xl font-bold flex items-center justify-center gap-2 hover:opacity-90"
                   >
-                    <Lock size={16} /> Place Order - ${total.toFixed(2)}
+                    {placingOrder ? (
+                      <div className="w-5 h-5 border-2 border-[var(--background)] border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Lock size={16} /> Place Order - ${total.toFixed(2)}
+                      </>
+                    )}
                   </button>
                 </div>
               )}

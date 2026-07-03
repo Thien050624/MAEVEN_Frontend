@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   BarChart3, TrendingUp, Users, Package, DollarSign, ShoppingCart,
@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useApp } from "../../context/AppContext";
+import { fetchAllOrders, type OrderDto } from "../../api/ordersApi";
 
 const revenueData = [
   { month: "Jan", revenue: 42000, orders: 320 },
@@ -63,6 +64,8 @@ export function AdminDashboard() {
   const { navigate, logout, allProducts, updateProductSale, toast } = useApp();
   const [tab, setTab] = useState<AdminTab>("overview");
   const [searchQ, setSearchQ] = useState("");
+  const [orders, setOrders] = useState<OrderDto[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
   
   // Sale Setting State
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
@@ -77,14 +80,43 @@ export function AdminDashboard() {
 
   const [ordersPage, setOrdersPage] = useState(1);
   const ordersPerPage = 5;
-  const totalOrderPages = Math.ceil(recentOrders.length / ordersPerPage);
-  const currentOrders = recentOrders.slice((ordersPage - 1) * ordersPerPage, ordersPage * ordersPerPage);
+  const totalOrderPages = Math.max(1, Math.ceil(orders.length / ordersPerPage));
+  const currentOrders = orders.slice((ordersPage - 1) * ordersPerPage, ordersPage * ordersPerPage);
+
+  useEffect(() => {
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      setOrders([]);
+      return;
+    }
+
+    let cancelled = false;
+    setOrdersLoading(true);
+    fetchAllOrders(token)
+      .then((data) => {
+        if (!cancelled) setOrders(data);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!cancelled) toast("Could not load admin orders", "error");
+      })
+      .finally(() => {
+        if (!cancelled) setOrdersLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [toast]);
+
+  const totalRevenue = useMemo(() => orders.reduce((sum, order) => sum + order.total, 0), [orders]);
+  const uniqueCustomers = useMemo(() => new Set(orders.map((order) => order.userId)).size, [orders]);
 
   const stats = [
-    { label: "Total Revenue", value: "$362,000", change: "+18.2%", positive: true, icon: DollarSign },
-    { label: "Total Orders", value: "2,900", change: "+12.5%", positive: true, icon: ShoppingCart },
-    { label: "Active Customers", value: "18,432", change: "+8.1%", positive: true, icon: Users },
-    { label: "Products", value: "642", change: "-2.3%", positive: false, icon: Package },
+    { label: "Total Revenue", value: `$${totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, change: "+18.2%", positive: true, icon: DollarSign },
+    { label: "Total Orders", value: orders.length.toString(), change: "+12.5%", positive: true, icon: ShoppingCart },
+    { label: "Active Customers", value: uniqueCustomers.toString(), change: "+8.1%", positive: true, icon: Users },
+    { label: "Products", value: allProducts.length.toString(), change: "-2.3%", positive: false, icon: Package },
   ];
 
   const handleLogout = () => {
@@ -244,18 +276,21 @@ export function AdminDashboard() {
                   <button onClick={() => setTab("orders")} className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">View All</button>
                 </div>
                 <div className="space-y-3">
-                  {recentOrders.slice(0, 4).map((order) => (
+                  {orders.slice(0, 4).map((order) => (
                     <div key={order.id} className="flex items-center gap-3 py-2 border-b border-[var(--border)] last:border-0">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold font-mono">{order.id}</p>
-                        <p className="text-xs text-[var(--muted-foreground)]">{order.customer}</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">{order.customerName}</p>
                       </div>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColors[order.status]}`}>
                         {order.status}
                       </span>
-                      <span className="text-sm font-bold">${order.total}</span>
+                      <span className="text-sm font-bold">${order.total.toFixed(2)}</span>
                     </div>
                   ))}
+                  {!ordersLoading && orders.length === 0 && (
+                    <p className="text-sm text-[var(--muted-foreground)] py-6 text-center">No orders yet.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -465,10 +500,10 @@ export function AdminDashboard() {
                   {currentOrders.map((order) => (
                     <tr key={order.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)] transition-colors">
                       <td className="px-5 py-4 text-sm font-mono font-semibold">{order.id}</td>
-                      <td className="px-5 py-4 text-sm">{order.customer}</td>
-                      <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">{order.date}</td>
-                      <td className="px-5 py-4 text-sm">{order.items}</td>
-                      <td className="px-5 py-4 text-sm font-bold">${order.total}</td>
+                      <td className="px-5 py-4 text-sm">{order.customerName}</td>
+                      <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">{new Date(order.createdAt).toLocaleDateString()}</td>
+                      <td className="px-5 py-4 text-sm">{order.items.length}</td>
+                      <td className="px-5 py-4 text-sm font-bold">${order.total.toFixed(2)}</td>
                       <td className="px-5 py-4">
                         <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[order.status]}`}>{order.status}</span>
                       </td>
@@ -487,7 +522,7 @@ export function AdminDashboard() {
               {totalOrderPages > 1 && (
                 <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border)]">
                   <span className="text-xs text-[var(--muted-foreground)]">
-                    Showing {(ordersPage - 1) * ordersPerPage + 1} to {Math.min(ordersPage * ordersPerPage, recentOrders.length)} of {recentOrders.length} entries
+                    Showing {orders.length === 0 ? 0 : (ordersPage - 1) * ordersPerPage + 1} to {Math.min(ordersPage * ordersPerPage, orders.length)} of {orders.length} entries
                   </span>
                   <div className="flex items-center gap-2">
                     <button
