@@ -71,3 +71,17 @@ export async function updateMe(token: string, payload: { name: string; avatar: s
 
   return response.json();
 }
+
+export async function logout(token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok && response.status !== 401) {
+    throw new Error(`Logout failed: ${response.status}`);
+  }
+}

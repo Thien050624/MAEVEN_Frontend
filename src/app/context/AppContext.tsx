@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { products as initialProducts, type Product } from "../data/products";
 import { fetchProducts, fetchWishlist, toggleWishlistItem as apiToggleWishlistItem, updateProduct as apiUpdateProduct, updateProductSale as apiUpdateProductSale, type ProductUpsertPayload } from "../api/productsApi";
-import { login as apiLogin, register as apiRegister, getMe as apiGetMe, updateMe as apiUpdateMe } from "../api/authApi";
+import { login as apiLogin, register as apiRegister, getMe as apiGetMe, logout as apiLogout, updateMe as apiUpdateMe } from "../api/authApi";
 
 export interface CartItem {
   product: Product;
@@ -260,6 +260,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
+    const token = localStorage.getItem("maeven_token");
+    if (token) {
+      void apiLogout(token).catch((error) => {
+        console.error(error);
+      });
+    }
+
     localStorage.removeItem("maeven_token");
     setUser(null);
     setWishlist([]);

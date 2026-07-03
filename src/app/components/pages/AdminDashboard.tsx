@@ -375,7 +375,7 @@ export function AdminDashboard() {
             <button onClick={() => navigate("home")} className="px-4 py-2 text-sm border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors">
               View Store
             </button>
-            <button onClick={handleLogout} className="px-4 py-2 text-sm border border-[var(--border)] rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors flex items-center gap-2">
+            <button onClick={handleLogout} className="px-4 py-2 text-sm rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-2 font-semibold">
               <LogOut size={14} /> Sign out
             </button>
           </div>
