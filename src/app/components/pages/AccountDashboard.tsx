@@ -11,7 +11,6 @@ import {
   LogOut,
   MapPin,
   Package,
-  Plus,
   Settings,
   Star,
   User,
@@ -20,7 +19,7 @@ import { useApp } from "../../context/AppContext";
 import { ProductCard } from "../ProductCard";
 import { fetchMyOrders, type OrderDto } from "../../api/ordersApi";
 
-type Tab = "overview" | "orders" | "wishlist" | "addresses" | "payment" | "notifications" | "settings";
+type Tab = "overview" | "orders" | "wishlist" | "settings";
 
 const statusColors: Record<string, string> = {
   Pending: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
@@ -42,9 +41,6 @@ const navItems: { id: Tab; icon: typeof User; label: string }[] = [
   { id: "overview", icon: User, label: "Overview" },
   { id: "orders", icon: Package, label: "Orders" },
   { id: "wishlist", icon: Heart, label: "Wishlist" },
-  { id: "addresses", icon: MapPin, label: "Addresses" },
-  { id: "payment", icon: CreditCard, label: "Payment" },
-  { id: "notifications", icon: Bell, label: "Notifications" },
   { id: "settings", icon: Settings, label: "Settings" },
 ];
 
@@ -410,60 +406,6 @@ export function AccountDashboard() {
                     {wishlist.map((product) => <ProductCard key={product.id} product={product} />)}
                   </div>
                 )}
-              </div>
-            )}
-
-            {tab === "addresses" && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-black">Saved Addresses</h2>
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--border)] text-sm font-medium hover:bg-[var(--accent)] transition-colors">
-                    <Plus size={14} /> Add Address
-                  </button>
-                </div>
-                <div className="bg-[var(--card)] rounded-2xl p-6">
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    Shipping addresses are captured during checkout and shown inside each order detail.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {tab === "payment" && (
-              <div>
-                <h2 className="text-xl font-black mb-6">Payment Methods</h2>
-                <div className="bg-[var(--card)] rounded-2xl p-6">
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    MAEVEN currently supports Bank QR Transfer and Cash on Delivery at checkout.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {tab === "notifications" && (
-              <div>
-                <h2 className="text-xl font-black mb-6">Notification Preferences</h2>
-                <div className="bg-[var(--card)] rounded-2xl divide-y divide-[var(--border)]">
-                  {[
-                    { title: "Order Updates", sub: "Shipping, delivery and return notifications", enabled: true },
-                    { title: "New Arrivals", sub: "Be first to know about new products", enabled: true },
-                    { title: "Price Drops", sub: "Get notified when wishlisted items go on sale", enabled: true },
-                    { title: "Style Recommendations", sub: "Personalised picks from our AI Stylist", enabled: true },
-                  ].map((notif) => (
-                    <div key={notif.title} className="flex items-center justify-between p-5">
-                      <div>
-                        <p className="text-sm font-semibold">{notif.title}</p>
-                        <p className="text-xs text-[var(--muted-foreground)]">{notif.sub}</p>
-                      </div>
-                      <button
-                        onClick={() => toast(`${notif.title} ${notif.enabled ? "disabled" : "enabled"}`)}
-                        className={`w-11 h-6 rounded-full transition-all relative ${notif.enabled ? "bg-[var(--foreground)]" : "bg-[var(--border)]"}`}
-                      >
-                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${notif.enabled ? "left-6" : "left-1"}`} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 
