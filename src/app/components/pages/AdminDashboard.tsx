@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useApp } from "../../context/AppContext";
-import { fetchAllOrders, type OrderDto } from "../../api/ordersApi";
+import { fetchAllOrders, updateOrderStatus, type OrderDto } from "../../api/ordersApi";
 
 const revenueData = [
   { month: "Jan", revenue: 42000, orders: 320 },
@@ -52,11 +52,23 @@ const customersList = [
 ];
 
 const statusColors: Record<string, string> = {
+  Pending: "bg-zinc-100 text-zinc-700",
   Delivered: "bg-green-100 text-green-700",
   "In Transit": "bg-blue-100 text-blue-700",
   Processing: "bg-amber-100 text-amber-700",
   Cancelled: "bg-red-100 text-red-600",
 };
+
+const paymentStatusColors: Record<string, string> = {
+  Pending: "bg-amber-100 text-amber-700",
+  AwaitingTransfer: "bg-blue-100 text-blue-700",
+  Paid: "bg-green-100 text-green-700",
+  Failed: "bg-red-100 text-red-600",
+  Refunded: "bg-zinc-100 text-zinc-700",
+};
+
+const orderStatusOptions = ["Pending", "Processing", "In Transit", "Delivered", "Cancelled"];
+const paymentStatusOptions = ["Pending", "AwaitingTransfer", "Paid", "Failed", "Refunded"];
 
 type AdminTab = "overview" | "products" | "orders" | "customers";
 
@@ -66,6 +78,9 @@ export function AdminDashboard() {
   const [searchQ, setSearchQ] = useState("");
   const [orders, setOrders] = useState<OrderDto[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [orderSearchQ, setOrderSearchQ] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("All");
+  const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
   
   // Sale Setting State
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
@@ -80,8 +95,21 @@ export function AdminDashboard() {
 
   const [ordersPage, setOrdersPage] = useState(1);
   const ordersPerPage = 5;
-  const totalOrderPages = Math.max(1, Math.ceil(orders.length / ordersPerPage));
-  const currentOrders = orders.slice((ordersPage - 1) * ordersPerPage, ordersPage * ordersPerPage);
+  const filteredOrders = useMemo(() => {
+    const query = orderSearchQ.trim().toLowerCase();
+    return orders.filter((order) => {
+      const matchesQuery =
+        !query ||
+        order.id.toLowerCase().includes(query) ||
+        order.customerName.toLowerCase().includes(query) ||
+        order.customerEmail.toLowerCase().includes(query) ||
+        order.shippingAddress.phone.toLowerCase().includes(query);
+      const matchesStatus = orderStatusFilter === "All" || order.status === orderStatusFilter;
+      return matchesQuery && matchesStatus;
+    });
+  }, [orders, orderSearchQ, orderStatusFilter]);
+  const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPerPage));
+  const currentOrders = filteredOrders.slice((ordersPage - 1) * ordersPerPage, ordersPage * ordersPerPage);
 
   useEffect(() => {
     const token = localStorage.getItem("maeven_token");
@@ -122,6 +150,33 @@ export function AdminDashboard() {
   const handleLogout = () => {
     logout();
     navigate("home");
+  };
+
+  const handleOrderStatusChange = (orderId: string, field: "status" | "paymentStatus", value: string) => {
+    setOrders((prev) => prev.map((order) => order.id === orderId ? { ...order, [field]: value } : order));
+  };
+
+  const saveOrderStatus = async (order: OrderDto) => {
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      toast("Please sign in again", "error");
+      return;
+    }
+
+    setSavingOrderId(order.id);
+    try {
+      const updatedOrder = await updateOrderStatus(token, order.id, {
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+      });
+      setOrders((prev) => prev.map((item) => item.id === updatedOrder.id ? updatedOrder : item));
+      toast("Order updated", "success");
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not update order", "error");
+    } finally {
+      setSavingOrderId(null);
+    }
   };
 
   return (
@@ -474,14 +529,28 @@ export function AdminDashboard() {
             <div className="flex items-center gap-3 mb-6">
               <div className="flex-1 relative">
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
-                <input placeholder="Search orders..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none focus:border-[var(--foreground)] transition-colors" />
+                <input
+                  value={orderSearchQ}
+                  onChange={(event) => {
+                    setOrderSearchQ(event.target.value);
+                    setOrdersPage(1);
+                  }}
+                  placeholder="Search by order, customer, email, phone..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none focus:border-[var(--foreground)] transition-colors"
+                />
               </div>
-              <select className="px-4 py-2.5 border border-[var(--border)] rounded-xl text-sm bg-[var(--background)] outline-none">
-                <option>All Status</option>
-                <option>Processing</option>
-                <option>In Transit</option>
-                <option>Delivered</option>
-                <option>Cancelled</option>
+              <select
+                value={orderStatusFilter}
+                onChange={(event) => {
+                  setOrderStatusFilter(event.target.value);
+                  setOrdersPage(1);
+                }}
+                className="px-4 py-2.5 border border-[var(--border)] rounded-xl text-sm bg-[var(--background)] outline-none"
+              >
+                <option value="All">All Status</option>
+                {orderStatusOptions.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
               </select>
             </div>
 
@@ -489,7 +558,7 @@ export function AdminDashboard() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    {["Order ID", "Customer", "Date", "Items", "Total", "Status", "Actions"].map((h) => (
+                    {["Order ID", "Customer", "Date", "Items", "Total", "Payment", "Order Status", "Actions"].map((h) => (
                       <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                         {h}
                       </th>
@@ -500,21 +569,79 @@ export function AdminDashboard() {
                   {currentOrders.map((order) => (
                     <tr key={order.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)] transition-colors">
                       <td className="px-5 py-4 text-sm font-mono font-semibold">{order.id}</td>
-                      <td className="px-5 py-4 text-sm">{order.customerName}</td>
+                      <td className="px-5 py-4 text-sm">
+                        <p className="font-medium">{order.customerName}</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">{order.customerEmail}</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">{order.shippingAddress.phone}</p>
+                      </td>
                       <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">{new Date(order.createdAt).toLocaleDateString()}</td>
                       <td className="px-5 py-4 text-sm">{order.items.length}</td>
                       <td className="px-5 py-4 text-sm font-bold">${order.total.toFixed(2)}</td>
                       <td className="px-5 py-4">
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[order.status]}`}>{order.status}</span>
+                        <div className="space-y-2">
+                          <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium ${paymentStatusColors[order.paymentStatus] ?? "bg-zinc-100 text-zinc-700"}`}>
+                            {order.paymentStatus}
+                          </span>
+                          <select
+                            value={order.paymentStatus}
+                            onChange={(event) => handleOrderStatusChange(order.id, "paymentStatus", event.target.value)}
+                            className="block w-36 px-2.5 py-1.5 border border-[var(--border)] rounded-lg text-xs bg-[var(--background)] outline-none"
+                          >
+                            {paymentStatusOptions.map((status) => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex gap-2">
-                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"><Eye size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"><Edit3 size={14} /></button>
+                        <div className="space-y-2">
+                          <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[order.status] ?? "bg-zinc-100 text-zinc-700"}`}>
+                            {order.status}
+                          </span>
+                          <select
+                            value={order.status}
+                            onChange={(event) => handleOrderStatusChange(order.id, "status", event.target.value)}
+                            className="block w-32 px-2.5 py-1.5 border border-[var(--border)] rounded-lg text-xs bg-[var(--background)] outline-none"
+                          >
+                            {orderStatusOptions.map((status) => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => saveOrderStatus(order)}
+                            disabled={savingOrderId === order.id}
+                            className="px-3 py-1.5 rounded-lg bg-[var(--foreground)] text-[var(--background)] text-xs font-semibold disabled:opacity-60"
+                          >
+                            {savingOrderId === order.id ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            title={order.items.map((item) => `${item.quantity}x ${item.productName}`).join("\n")}
+                            className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"
+                          >
+                            <Eye size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ))}
+                  {!ordersLoading && currentOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">
+                        No orders match your filters.
+                      </td>
+                    </tr>
+                  )}
+                  {ordersLoading && (
+                    <tr>
+                      <td colSpan={8} className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">
+                        Loading orders...
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
 
@@ -522,7 +649,7 @@ export function AdminDashboard() {
               {totalOrderPages > 1 && (
                 <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border)]">
                   <span className="text-xs text-[var(--muted-foreground)]">
-                    Showing {orders.length === 0 ? 0 : (ordersPage - 1) * ordersPerPage + 1} to {Math.min(ordersPage * ordersPerPage, orders.length)} of {orders.length} entries
+                    Showing {filteredOrders.length === 0 ? 0 : (ordersPage - 1) * ordersPerPage + 1} to {Math.min(ordersPage * ordersPerPage, filteredOrders.length)} of {filteredOrders.length} entries
                   </span>
                   <div className="flex items-center gap-2">
                     <button

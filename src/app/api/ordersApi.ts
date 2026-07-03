@@ -98,3 +98,25 @@ export async function fetchAllOrders(token: string): Promise<OrderDto[]> {
 
   return response.json();
 }
+
+export async function updateOrderStatus(
+  token: string,
+  orderId: string,
+  payload: { status: string; paymentStatus: string }
+): Promise<OrderDto> {
+  const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to update order: ${response.status}`);
+  }
+
+  return response.json();
+}
