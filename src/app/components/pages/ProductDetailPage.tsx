@@ -5,7 +5,7 @@ import { useApp } from "../../context/AppContext";
 import { ProductCard } from "../ProductCard";
 
 export function ProductDetailPage() {
-  const { selectedProductId, navigate, addToCart, toggleWishlist, isWishlisted, toast, allProducts } = useApp();
+  const { selectedProductId, navigate, addToCart, toggleWishlist, isWishlisted, toast, allProducts, isLoggedIn } = useApp();
   const product = allProducts.find((p) => p.id === selectedProductId) || allProducts[0];
   const productReviews = product.reviewsData ?? [];
   const related = allProducts.filter((p) => p.id !== product.id && p.category === product.category).slice(0, 4);
@@ -20,9 +20,20 @@ export function ProductDetailPage() {
   const wishlisted = isWishlisted(product.id);
 
   const handleAddToCart = () => {
-    if (!selectedSize) { toast("Please select a size", "error"); return; }
-    addToCart(product, selectedSize, selectedColor, quantity);
-    toast(`${product.name} added to your bag ✓`);
+    if (!isLoggedIn) {
+      toast("Please sign in to add items to your bag", "info");
+      navigate("auth", { mode: "login" });
+      return false;
+    }
+    if (!selectedSize) {
+      toast("Please select a size", "error");
+      return false;
+    }
+    if (addToCart(product, selectedSize, selectedColor, quantity)) {
+      toast(`${product.name} added to your bag`);
+      return true;
+    }
+    return false;
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -243,7 +254,11 @@ export function ProductDetailPage() {
                 Add to Bag
               </button>
               <button
-                onClick={() => { handleAddToCart(); navigate("checkout"); }}
+                onClick={() => {
+                  if (handleAddToCart()) {
+                    navigate("checkout");
+                  }
+                }}
                 className="flex-1 py-4 border-2 border-[var(--foreground)] rounded-2xl font-bold text-sm hover:bg-[var(--foreground)] hover:text-[var(--background)] transition-all"
               >
                 Buy Now
@@ -394,11 +409,19 @@ export function ProductDetailPage() {
               <p className="text-2xl font-black">${product.price + allProducts[4].price + allProducts[7].price}</p>
               <button
                 onClick={() => {
-                  addToCart(product, product.sizes[0], product.colors[0]);
-                  addToCart(allProducts[4], allProducts[4].sizes[0], allProducts[4].colors[0]);
-                  addToCart(allProducts[7], allProducts[7].sizes[0], allProducts[7].colors[0]);
-                  toast("3 items added to your bag!");
-                  navigate("cart");
+                  if (!isLoggedIn) {
+                    toast("Please sign in to add items to your bag", "info");
+                    navigate("auth", { mode: "login" });
+                    return;
+                  }
+                  const added =
+                    addToCart(product, product.sizes[0], product.colors[0]) &&
+                    addToCart(allProducts[4], allProducts[4].sizes[0], allProducts[4].colors[0]) &&
+                    addToCart(allProducts[7], allProducts[7].sizes[0], allProducts[7].colors[0]);
+                  if (added) {
+                    toast("3 items added to your bag!");
+                    navigate("cart");
+                  }
                 }}
                 className="px-6 py-3 bg-[var(--foreground)] text-[var(--background)] rounded-xl font-semibold text-sm whitespace-nowrap hover:opacity-90"
               >

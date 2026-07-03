@@ -28,7 +28,7 @@ interface AppContextType {
 
   // Cart
   cartItems: CartItem[];
-  addToCart: (product: Product, size: string, color: string, qty?: number) => void;
+  addToCart: (product: Product, size: string, color: string, qty?: number) => boolean;
   removeFromCart: (productId: string, size: string, color: string) => void;
   updateCartQty: (productId: string, size: string, color: string, qty: number) => void;
   cartCount: number;
@@ -194,6 +194,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addToCart = (product: Product, size: string, color: string, qty = 1) => {
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      toast("Please sign in to add items to your bag", "info");
+      navigate("auth", { mode: "login" });
+      return false;
+    }
+
     setCartItems((prev) => {
       const existing = prev.find(
         (i) => i.product.id === product.id && i.size === size && i.color === color
@@ -207,6 +214,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return [...prev, { product, quantity: qty, size, color }];
     });
+    return true;
   };
 
   const removeFromCart = (productId: string, size: string, color: string) => {

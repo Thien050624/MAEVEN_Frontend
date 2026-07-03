@@ -17,8 +17,9 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addToCart(product, product.sizes[0], product.colors[0]);
-    toast(`${product.name} added to bag`);
+    if (addToCart(product, product.sizes[0], product.colors[0])) {
+      toast(`${product.name} added to bag`);
+    }
   };
 
   const handleWishlist = (e: React.MouseEvent) => {

@@ -7,9 +7,11 @@ export function WishlistPage() {
   const { wishlist, toggleWishlist, addToCart, navigate, toast, allProducts } = useApp();
 
   const moveAllToCart = () => {
-    wishlist.forEach((p) => addToCart(p, p.sizes[0], p.colors[0]));
-    toast(`${wishlist.length} items added to your bag!`);
-    navigate("cart");
+    const addedCount = wishlist.filter((p) => addToCart(p, p.sizes[0], p.colors[0])).length;
+    if (addedCount > 0) {
+      toast(`${addedCount} items added to your bag!`);
+      navigate("cart");
+    }
   };
 
   const shareWishlist = () => {
@@ -81,7 +83,11 @@ export function WishlistPage() {
                 <ProductCard product={p} />
                 <div className="mt-3 flex gap-2">
                   <button
-                    onClick={() => { addToCart(p, p.sizes[0], p.colors[0]); toast(`${p.name} added to bag`); }}
+                    onClick={() => {
+                      if (addToCart(p, p.sizes[0], p.colors[0])) {
+                        toast(`${p.name} added to bag`);
+                      }
+                    }}
                     className="flex-1 py-2.5 bg-[var(--foreground)] text-[var(--background)] rounded-xl text-xs font-semibold hover:opacity-90 flex items-center justify-center gap-1.5"
                   >
                     <ShoppingBag size={12} /> Move to Bag
