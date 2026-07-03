@@ -116,6 +116,14 @@ export function AccountDashboard() {
     setTab("orders");
   };
 
+  const openProfileEditor = () => {
+    setTab("settings");
+    window.setTimeout(() => {
+      document.getElementById("account-profile-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("account-profile-name")?.focus();
+    }, 0);
+  };
+
   const handleLogout = () => {
     logout();
     navigate("home");
@@ -166,7 +174,13 @@ export function AccountDashboard() {
             <div className="bg-[var(--card)] rounded-2xl p-6 mb-4 text-center">
               <div className="relative inline-block mb-3">
                 <img src={user.avatar} alt={user.name} className="w-20 h-20 rounded-full object-cover mx-auto" />
-                <button className="absolute bottom-0 right-0 w-7 h-7 bg-[var(--foreground)] text-[var(--background)] rounded-full flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={openProfileEditor}
+                  aria-label="Edit profile"
+                  title="Edit profile"
+                  className="absolute bottom-0 right-0 w-7 h-7 bg-[var(--foreground)] text-[var(--background)] rounded-full flex items-center justify-center"
+                >
                   <Edit3 size={12} />
                 </button>
               </div>
@@ -224,7 +238,7 @@ export function AccountDashboard() {
                   ))}
                 </div>
 
-                <div className="bg-[var(--card)] rounded-2xl p-6">
+                <div id="account-profile-form" className="bg-[var(--card)] rounded-2xl p-6 scroll-mt-6">
                   <div className="flex items-center justify-between mb-5">
                     <h3 className="font-bold text-lg">Recent Orders</h3>
                     <button onClick={() => setTab("orders")} className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
@@ -483,6 +497,7 @@ export function AccountDashboard() {
                       <label className="block space-y-1.5">
                         <span className="text-xs font-semibold text-[var(--muted-foreground)]">Full Name</span>
                         <input
+                          id="account-profile-name"
                           value={profileName}
                           onChange={(event) => setProfileName(event.target.value)}
                           className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none"
