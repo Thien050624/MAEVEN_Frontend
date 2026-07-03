@@ -6,6 +6,7 @@ import { createOrder, type OrderDto } from "../../api/ordersApi";
 
 type Step = "shipping" | "delivery" | "payment" | "confirmation";
 type PaymentMethod = "qr" | "cod";
+type ShippingField = "firstName" | "lastName" | "email" | "phone" | "address";
 
 const steps: Step[] = ["shipping", "delivery", "payment", "confirmation"];
 const stepLabels = {
@@ -52,6 +53,7 @@ export function CheckoutPage() {
     address: "",
     country: "Vietnam",
   });
+  const [shippingErrors, setShippingErrors] = useState<Partial<Record<ShippingField, string>>>({});
   const [delivery, setDelivery] = useState("standard");
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
@@ -63,7 +65,46 @@ export function CheckoutPage() {
   const total = cartTotal + shippingCost + tax;
   const currentStepIdx = steps.indexOf(step);
 
+  const updateShippingField = (field: ShippingField, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setShippingErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const validateShipping = () => {
+    const nextErrors: Partial<Record<ShippingField, string>> = {};
+    const phoneDigits = form.phone.replace(/\D/g, "");
+
+    if (!form.firstName.trim()) nextErrors.firstName = "First name is required.";
+    if (!form.lastName.trim()) nextErrors.lastName = "Last name is required.";
+    if (!form.email.trim()) nextErrors.email = "Email is required.";
+    if (!form.phone.trim()) nextErrors.phone = "Phone number is required.";
+    if (form.phone.trim() && phoneDigits.length < 10) nextErrors.phone = "Enter a valid Vietnam phone number.";
+    if (!form.address.trim()) nextErrors.address = "Address is required.";
+
+    setShippingErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const fieldClassName = (field: ShippingField, multiline = false) =>
+    `w-full px-4 py-3 rounded-xl border bg-[var(--background)] outline-none transition-colors text-sm ${
+      multiline ? "resize-none" : ""
+    } ${
+      shippingErrors[field]
+        ? "border-red-500 focus:border-red-500"
+        : "border-[var(--border)] focus:border-[var(--foreground)]"
+    }`;
+
   const handleNext = async () => {
+    if (step === "shipping" && !validateShipping()) {
+      toast("Please complete the highlighted shipping fields", "error");
+      return;
+    }
+
     const nextIdx = currentStepIdx + 1;
     const nextStep = steps[nextIdx];
 
@@ -255,10 +296,13 @@ export function CheckoutPage() {
                         <label className="text-sm font-medium mb-1.5 block">{label}</label>
                         <input
                           value={form[key as keyof typeof form]}
-                          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                          onChange={(e) => updateShippingField(key as ShippingField, e.target.value)}
                           placeholder={placeholder}
-                          className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--background)] outline-none focus:border-[var(--foreground)] transition-colors text-sm"
+                          className={fieldClassName(key as ShippingField)}
                         />
+                        {shippingErrors[key as ShippingField] && (
+                          <p className="mt-1.5 text-xs font-medium text-red-500">{shippingErrors[key as ShippingField]}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -268,10 +312,13 @@ export function CheckoutPage() {
                       <input
                         type="email"
                         value={form.email}
-                        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                        onChange={(e) => updateShippingField("email", e.target.value)}
                         placeholder="linh@email.com"
-                        className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--background)] outline-none focus:border-[var(--foreground)] transition-colors text-sm"
+                        className={fieldClassName("email")}
                       />
+                      {shippingErrors.email && (
+                        <p className="mt-1.5 text-xs font-medium text-red-500">{shippingErrors.email}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1.5 block">Phone</label>
@@ -279,21 +326,27 @@ export function CheckoutPage() {
                         type="tel"
                         inputMode="tel"
                         value={form.phone}
-                        onChange={(e) => setForm((f) => ({ ...f, phone: formatVietnamPhone(e.target.value) }))}
+                        onChange={(e) => updateShippingField("phone", formatVietnamPhone(e.target.value))}
                         placeholder="0912 345 678"
-                        className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--background)] outline-none focus:border-[var(--foreground)] transition-colors text-sm"
+                        className={fieldClassName("phone")}
                       />
+                      {shippingErrors.phone && (
+                        <p className="mt-1.5 text-xs font-medium text-red-500">{shippingErrors.phone}</p>
+                      )}
                     </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1.5 block">Address</label>
                     <textarea
                       value={form.address}
-                      onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                      onChange={(e) => updateShippingField("address", e.target.value)}
                       placeholder="So nha, ten duong, phuong/xa, quan/huyen, tinh/thanh pho"
                       rows={4}
-                      className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--background)] outline-none focus:border-[var(--foreground)] transition-colors text-sm resize-none"
+                      className={fieldClassName("address", true)}
                     />
+                    {shippingErrors.address && (
+                      <p className="mt-1.5 text-xs font-medium text-red-500">{shippingErrors.address}</p>
+                    )}
                   </div>
                   <button
                     onClick={handleNext}
