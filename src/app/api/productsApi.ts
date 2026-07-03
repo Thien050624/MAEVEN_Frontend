@@ -164,6 +164,25 @@ export async function updateProduct(productId: string, payload: ProductUpsertPay
   return mapProductApiToProduct(data);
 }
 
+export async function createProduct(payload: ProductUpsertPayload, token: string): Promise<Product> {
+  const response = await fetch(`${API_BASE_URL}/products`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to create product: ${response.status}`);
+  }
+
+  const data: ProductApiDto = await response.json();
+  return mapProductApiToProduct(data);
+}
+
 export async function fetchWishlist(token: string): Promise<Product[]> {
   const response = await fetch(`${API_BASE_URL}/wishlist`, {
     headers: {

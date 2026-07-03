@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { products as initialProducts, type Product } from "../data/products";
-import { fetchProducts, fetchWishlist, toggleWishlistItem as apiToggleWishlistItem, updateProduct as apiUpdateProduct, updateProductSale as apiUpdateProductSale, type ProductUpsertPayload } from "../api/productsApi";
+import { createProduct as apiCreateProduct, fetchProducts, fetchWishlist, toggleWishlistItem as apiToggleWishlistItem, updateProduct as apiUpdateProduct, updateProductSale as apiUpdateProductSale, type ProductUpsertPayload } from "../api/productsApi";
 import { login as apiLogin, register as apiRegister, getMe as apiGetMe, logout as apiLogout, updateMe as apiUpdateMe } from "../api/authApi";
 
 export interface CartItem {
@@ -24,6 +24,7 @@ interface AppContextType {
   allProducts: Product[];
   updateProductSale: (productId: string, discount: number | undefined) => void;
   updateProductDetails: (productId: string, payload: ProductUpsertPayload) => Promise<Product>;
+  createProduct: (payload: ProductUpsertPayload) => Promise<Product>;
 
   // Cart
   cartItems: CartItem[];
@@ -179,6 +180,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updatedProduct = await apiUpdateProduct(productId, payload, token);
     replaceProductEverywhere(updatedProduct);
     return updatedProduct;
+  };
+
+  const createProduct = async (payload: ProductUpsertPayload) => {
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      throw new Error("Please sign in again.");
+    }
+
+    const createdProduct = await apiCreateProduct(payload, token);
+    setAllProducts((prev) => [...prev, createdProduct]);
+    return createdProduct;
   };
 
   const addToCart = (product: Product, size: string, color: string, qty = 1) => {
@@ -374,7 +386,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        allProducts, updateProductSale, updateProductDetails,
+        allProducts, updateProductSale, updateProductDetails, createProduct,
         cartItems, addToCart, removeFromCart, updateCartQty, cartCount, cartTotal, clearCart,
         wishlist, toggleWishlist, isWishlisted,
         user, isLoggedIn: !!user, login, logout, register, updateProfile,

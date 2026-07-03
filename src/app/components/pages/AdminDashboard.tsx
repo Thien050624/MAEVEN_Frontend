@@ -67,6 +67,7 @@ const paymentStatusOptions = ["Pending", "AwaitingTransfer", "Paid", "Failed", "
 const productCategories: Product["category"][] = ["men", "shoes", "accessories"];
 
 interface ProductEditForm {
+  id: string;
   name: string;
   brand: string;
   price: string;
@@ -92,7 +93,7 @@ interface ProductEditForm {
 type AdminTab = "overview" | "products" | "orders" | "customers";
 
 export function AdminDashboard() {
-  const { navigate, logout, allProducts, updateProductSale, updateProductDetails, toast } = useApp();
+  const { navigate, logout, allProducts, updateProductSale, updateProductDetails, createProduct, toast } = useApp();
   const [tab, setTab] = useState<AdminTab>("overview");
   const [searchQ, setSearchQ] = useState("");
   const [orders, setOrders] = useState<OrderDto[]>([]);
@@ -104,6 +105,7 @@ export function AdminDashboard() {
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearchQ, setCustomerSearchQ] = useState("");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [productForm, setProductForm] = useState<ProductEditForm | null>(null);
   const [savingProduct, setSavingProduct] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
@@ -244,8 +246,10 @@ export function AdminDashboard() {
   };
 
   const startEditingProduct = (product: Product) => {
+    setIsAddingProduct(false);
     setEditingProduct(product);
     setProductForm({
+      id: product.id,
       name: product.name,
       brand: product.brand,
       price: product.price.toString(),
@@ -269,27 +273,60 @@ export function AdminDashboard() {
     });
   };
 
+  const startAddingProduct = () => {
+    const nextNumber = allProducts
+      .map((product) => Number(product.id.replace(/^p/i, "")))
+      .filter((value) => Number.isFinite(value))
+      .reduce((max, value) => Math.max(max, value), 0) + 1;
+
+    setIsAddingProduct(true);
+    setEditingProduct(null);
+    setProductForm({
+      id: `p${nextNumber}`,
+      name: "",
+      brand: "MAEVEN",
+      price: "",
+      originalPrice: "",
+      discount: "",
+      category: "men",
+      subcategory: "",
+      description: "",
+      colors: "#1a1a1a",
+      sizes: "S, M, L, XL",
+      images: "",
+      tags: "",
+      material: "",
+      care: "",
+      fit: "",
+      inStock: true,
+      isNew: true,
+      isBestSeller: false,
+      isTrending: false,
+      isLimited: false,
+    });
+  };
+
   const updateProductForm = <K extends keyof ProductEditForm>(field: K, value: ProductEditForm[K]) => {
     setProductForm((prev) => prev ? { ...prev, [field]: value } : prev);
   };
 
   const splitList = (value: string) => value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
 
-  const buildProductPayload = (product: Product, form: ProductEditForm): ProductUpsertPayload => {
+  const buildProductPayload = (form: ProductEditForm, product?: Product): ProductUpsertPayload => {
     const specs: Record<string, string> = {};
     if (form.material.trim()) specs.Material = form.material.trim();
     if (form.care.trim()) specs.Care = form.care.trim();
     if (form.fit.trim()) specs.Fit = form.fit.trim();
 
     return {
-      id: product.id,
+      id: form.id.trim(),
       name: form.name.trim(),
       brand: form.brand.trim(),
       price: Number(form.price) || 0,
       originalPrice: form.originalPrice.trim() ? Number(form.originalPrice) : null,
       discount: form.discount.trim() ? Number(form.discount) : null,
-      rating: product.rating,
-      reviewsCount: product.reviews,
+      rating: product?.rating ?? 0,
+      reviewsCount: product?.reviews ?? 0,
       category: form.category,
       subcategory: form.subcategory.trim(),
       description: form.description.trim(),
@@ -307,11 +344,11 @@ export function AdminDashboard() {
   };
 
   const saveProduct = async () => {
-    if (!editingProduct || !productForm) return;
+    if (!productForm) return;
 
     const images = splitList(productForm.images);
-    if (!productForm.name.trim() || !productForm.brand.trim() || !productForm.subcategory.trim()) {
-      toast("Name, brand, and subcategory are required", "error");
+    if (!productForm.id.trim() || !productForm.name.trim() || !productForm.brand.trim() || !productForm.subcategory.trim()) {
+      toast("Product ID, name, brand, and subcategory are required", "error");
       return;
     }
 
@@ -322,13 +359,19 @@ export function AdminDashboard() {
 
     setSavingProduct(true);
     try {
-      await updateProductDetails(editingProduct.id, buildProductPayload(editingProduct, productForm));
-      toast("Product updated successfully");
+      if (isAddingProduct) {
+        await createProduct(buildProductPayload(productForm));
+        toast("Product created successfully");
+      } else if (editingProduct) {
+        await updateProductDetails(editingProduct.id, buildProductPayload(productForm, editingProduct));
+        toast("Product updated successfully");
+      }
       setEditingProduct(null);
+      setIsAddingProduct(false);
       setProductForm(null);
     } catch (error: any) {
       console.error(error);
-      toast(error?.message || "Could not update product", "error");
+      toast(error?.message || "Could not save product", "error");
     } finally {
       setSavingProduct(false);
     }
@@ -553,7 +596,10 @@ export function AdminDashboard() {
               <button className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border)] rounded-xl text-sm">
                 <Filter size={14} /> Filter
               </button>
-              <button className="flex items-center gap-2 px-4 py-2.5 bg-[var(--foreground)] text-[var(--background)] rounded-xl text-sm font-medium">
+              <button
+                onClick={startAddingProduct}
+                className="flex items-center gap-2 px-4 py-2.5 bg-[var(--foreground)] text-[var(--background)] rounded-xl text-sm font-medium"
+              >
                 <Plus size={14} /> Add Product
               </button>
             </div>
@@ -958,17 +1004,18 @@ export function AdminDashboard() {
           </div>
         )}
 
-        {editingProduct && productForm && (
+        {(editingProduct || isAddingProduct) && productForm && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4 py-8">
             <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--background)] shadow-2xl">
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-6 py-4">
                 <div>
-                  <h2 className="text-xl font-black">Edit Product</h2>
-                  <p className="text-xs text-[var(--muted-foreground)] font-mono">{editingProduct.id}</p>
+                  <h2 className="text-xl font-black">{isAddingProduct ? "Add Product" : "Edit Product"}</h2>
+                  <p className="text-xs text-[var(--muted-foreground)] font-mono">{productForm.id}</p>
                 </div>
                 <button
                   onClick={() => {
                     setEditingProduct(null);
+                    setIsAddingProduct(false);
                     setProductForm(null);
                   }}
                   className="p-2 rounded-xl hover:bg-[var(--accent)]"
@@ -980,6 +1027,15 @@ export function AdminDashboard() {
               <div className="grid lg:grid-cols-[1fr_320px] gap-6 p-6">
                 <div className="space-y-5">
                   <div className="grid sm:grid-cols-2 gap-4">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Product ID</span>
+                      <input
+                        value={productForm.id}
+                        onChange={(e) => updateProductForm("id", e.target.value)}
+                        disabled={!isAddingProduct}
+                        className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none disabled:opacity-60"
+                      />
+                    </label>
                     <label className="space-y-1.5">
                       <span className="text-xs font-semibold text-[var(--muted-foreground)]">Name</span>
                       <input value={productForm.name} onChange={(e) => updateProductForm("name", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
@@ -1158,6 +1214,7 @@ export function AdminDashboard() {
                 <button
                   onClick={() => {
                     setEditingProduct(null);
+                    setIsAddingProduct(false);
                     setProductForm(null);
                   }}
                   className="px-4 py-2 rounded-xl border border-[var(--border)] text-sm font-medium hover:bg-[var(--accent)]"
@@ -1169,7 +1226,7 @@ export function AdminDashboard() {
                   disabled={savingProduct}
                   className="px-5 py-2 rounded-xl bg-[var(--foreground)] text-[var(--background)] text-sm font-semibold disabled:opacity-60"
                 >
-                  {savingProduct ? "Saving..." : "Save Product"}
+                  {savingProduct ? "Saving..." : isAddingProduct ? "Create Product" : "Save Product"}
                 </button>
               </div>
             </div>
