@@ -53,3 +53,21 @@ export async function getMe(token: string): Promise<User> {
 
   return response.json();
 }
+
+export async function updateMe(token: string, payload: { name: string; avatar: string }): Promise<User> {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: "PUT",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Profile update failed: ${response.status}`);
+  }
+
+  return response.json();
+}

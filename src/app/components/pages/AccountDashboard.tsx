@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import {
   Award,
-  Bell,
-  Check,
   ChevronRight,
   CreditCard,
   Edit3,
@@ -18,6 +16,7 @@ import {
 import { useApp } from "../../context/AppContext";
 import { ProductCard } from "../ProductCard";
 import { fetchMyOrders, type OrderDto } from "../../api/ordersApi";
+import { uploadProductImage } from "../../api/cloudinaryApi";
 
 type Tab = "overview" | "orders" | "wishlist" | "settings";
 
@@ -58,16 +57,24 @@ function StatusBadge({ value, type = "order" }: { value: string; type?: "order" 
 }
 
 export function AccountDashboard() {
-  const { user, logout, navigate, wishlist, pageParams, toast } = useApp();
+  const { user, logout, navigate, wishlist, pageParams, toast, updateProfile } = useApp();
   const [tab, setTab] = useState<Tab>((pageParams.tab as Tab) || "overview");
   const [orders, setOrders] = useState<OrderDto[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profileAvatar, setProfileAvatar] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (!user) {
       navigate("auth");
+      return;
     }
+
+    setProfileName(user.name);
+    setProfileAvatar(user.avatar);
   }, [user, navigate]);
 
   useEffect(() => {
@@ -113,6 +120,40 @@ export function AccountDashboard() {
     logout();
     navigate("home");
     toast("Signed out successfully");
+  };
+
+  const handleAvatarUpload = async (file: File | undefined) => {
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    try {
+      const imageUrl = await uploadProductImage(file);
+      setProfileAvatar(imageUrl);
+      toast("Avatar uploaded");
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not upload avatar", "error");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    if (!profileName.trim()) {
+      toast("Name is required", "error");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      await updateProfile({ name: profileName.trim(), avatar: profileAvatar.trim() });
+      toast("Profile updated");
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not update profile", "error");
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   return (
@@ -413,21 +454,71 @@ export function AccountDashboard() {
               <div className="space-y-6">
                 <div className="bg-[var(--card)] rounded-2xl p-6">
                   <h2 className="text-xl font-black mb-6">Account Settings</h2>
-                  {[
-                    { label: "Full Name", value: user.name },
-                    { label: "Email Address", value: user.email },
-                    { label: "Membership Tier", value: user.tier },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex items-center justify-between py-3 border-b border-[var(--border)] last:border-0">
-                      <div>
-                        <p className="text-xs text-[var(--muted-foreground)]">{label}</p>
-                        <p className="text-sm font-medium mt-0.5">{value}</p>
+
+                  <div className="grid lg:grid-cols-[220px_1fr] gap-6">
+                    <div>
+                      <div className="aspect-square rounded-2xl overflow-hidden bg-[var(--accent)] mb-3">
+                        <img
+                          src={profileAvatar || user.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&q=80"}
+                          alt={profileName || user.name}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                      <button className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] flex items-center gap-1">
-                        <Edit3 size={12} /> Edit
+                      <label className="flex cursor-pointer items-center justify-center rounded-xl bg-[var(--foreground)] px-4 py-2 text-sm font-semibold text-[var(--background)]">
+                        {uploadingAvatar ? "Uploading..." : "Upload Avatar"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingAvatar}
+                          onChange={(event) => {
+                            void handleAvatarUpload(event.target.files?.[0]);
+                            event.target.value = "";
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="space-y-4">
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-semibold text-[var(--muted-foreground)]">Full Name</span>
+                        <input
+                          value={profileName}
+                          onChange={(event) => setProfileName(event.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none"
+                        />
+                      </label>
+
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-semibold text-[var(--muted-foreground)]">Avatar URL from Google Flow</span>
+                        <input
+                          value={profileAvatar}
+                          onChange={(event) => setProfileAvatar(event.target.value)}
+                          placeholder="https://..."
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none"
+                        />
+                      </label>
+
+                      <div className="grid sm:grid-cols-2 gap-4 rounded-xl border border-[var(--border)] p-4">
+                        <div>
+                          <p className="text-xs text-[var(--muted-foreground)]">Email Address</p>
+                          <p className="text-sm font-medium mt-0.5">{user.email}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[var(--muted-foreground)]">Membership Tier</p>
+                          <p className="text-sm font-medium mt-0.5">{user.tier}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={saveProfile}
+                        disabled={savingProfile || uploadingAvatar}
+                        className="px-5 py-2.5 rounded-xl bg-[var(--foreground)] text-[var(--background)] text-sm font-semibold disabled:opacity-60"
+                      >
+                        {savingProfile ? "Saving..." : "Save Changes"}
                       </button>
                     </div>
-                  ))}
+                  </div>
                 </div>
                 <div className="bg-red-50 dark:bg-red-950 rounded-2xl p-6">
                   <h3 className="font-bold text-red-600 mb-2">Danger Zone</h3>

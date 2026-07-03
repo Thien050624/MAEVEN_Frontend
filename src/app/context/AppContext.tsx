@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { products as initialProducts, type Product } from "../data/products";
 import { fetchProducts, fetchWishlist, toggleWishlistItem as apiToggleWishlistItem, updateProduct as apiUpdateProduct, updateProductSale as apiUpdateProductSale, type ProductUpsertPayload } from "../api/productsApi";
-import { login as apiLogin, register as apiRegister, getMe as apiGetMe } from "../api/authApi";
+import { login as apiLogin, register as apiRegister, getMe as apiGetMe, updateMe as apiUpdateMe } from "../api/authApi";
 
 export interface CartItem {
   product: Product;
@@ -45,6 +45,7 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<"admin" | "user">;
   logout: () => void;
   register: (name: string, email: string, password: string) => Promise<User>;
+  updateProfile: (payload: { name: string; avatar: string }) => Promise<User>;
 
   // Search
   searchQuery: string;
@@ -278,6 +279,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateProfile = async (payload: { name: string; avatar: string }) => {
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      throw new Error("Please sign in again.");
+    }
+
+    const updatedUser = await apiUpdateMe(token, payload);
+    setUser(updatedUser);
+    return updatedUser;
+  };
+
   const addRecentSearch = (q: string) => {
     setRecentSearches((prev) => [q, ...prev.filter((s) => s !== q)].slice(0, 6));
   };
@@ -358,7 +370,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         allProducts, updateProductSale, updateProductDetails,
         cartItems, addToCart, removeFromCart, updateCartQty, cartCount, cartTotal, clearCart,
         wishlist, toggleWishlist, isWishlisted,
-        user, isLoggedIn: !!user, login, logout, register,
+        user, isLoggedIn: !!user, login, logout, register, updateProfile,
         searchQuery, setSearchQuery, recentSearches, addRecentSearch,
         darkMode, toggleDarkMode,
         toast, notifications,
