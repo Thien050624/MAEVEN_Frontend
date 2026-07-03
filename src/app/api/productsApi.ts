@@ -116,6 +116,54 @@ export async function updateProductSale(productId: string, discount: number | un
   }
 }
 
+export interface ProductUpsertPayload {
+  id: string;
+  name: string;
+  brand: string;
+  price: number;
+  originalPrice?: number | null;
+  discount?: number | null;
+  rating: number;
+  reviewsCount: number;
+  category: Product["category"];
+  subcategory: string;
+  description: string;
+  isNew: boolean;
+  isBestSeller: boolean;
+  isTrending: boolean;
+  isLimited: boolean;
+  inStock: boolean;
+  colors: string[];
+  sizes: string[];
+  images: string[];
+  specs: Record<string, string>;
+  tags: string[];
+}
+
+export async function updateProduct(productId: string, payload: ProductUpsertPayload, token: string): Promise<Product> {
+  const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to update product: ${response.status}`);
+  }
+
+  const refreshed = await fetch(`${API_BASE_URL}/products/${productId}`);
+  if (!refreshed.ok) {
+    throw new Error(`Product updated, but refresh failed: ${refreshed.status}`);
+  }
+
+  const data: ProductApiDto = await refreshed.json();
+  return mapProductApiToProduct(data);
+}
+
 export async function fetchWishlist(token: string): Promise<Product[]> {
   const response = await fetch(`${API_BASE_URL}/wishlist`, {
     headers: {

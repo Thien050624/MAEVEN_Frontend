@@ -3,11 +3,14 @@ import { motion } from "motion/react";
 import {
   BarChart3, TrendingUp, Users, Package, DollarSign, ShoppingCart,
   ArrowUpRight, ArrowDownRight, Search, Filter, Eye, Edit3, Trash2,
-  Plus, Star, AlertCircle, CheckCircle, LogOut, ChevronLeft, ChevronRight
+  Plus, Star, AlertCircle, CheckCircle, LogOut, ChevronLeft, ChevronRight, X
 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useApp } from "../../context/AppContext";
 import { fetchAllOrders, updateOrderStatus, type OrderDto } from "../../api/ordersApi";
+import type { Product } from "../../data/products";
+import type { ProductUpsertPayload } from "../../api/productsApi";
+import { uploadProductImage } from "../../api/cloudinaryApi";
 
 const revenueData = [
   { month: "Jan", revenue: 42000, orders: 320 },
@@ -69,11 +72,35 @@ const paymentStatusColors: Record<string, string> = {
 
 const orderStatusOptions = ["Pending", "Processing", "In Transit", "Delivered", "Cancelled"];
 const paymentStatusOptions = ["Pending", "AwaitingTransfer", "Paid", "Failed", "Refunded"];
+const productCategories: Product["category"][] = ["men", "shoes", "accessories"];
+
+interface ProductEditForm {
+  name: string;
+  brand: string;
+  price: string;
+  originalPrice: string;
+  discount: string;
+  category: Product["category"];
+  subcategory: string;
+  description: string;
+  colors: string;
+  sizes: string;
+  images: string;
+  tags: string;
+  material: string;
+  care: string;
+  fit: string;
+  inStock: boolean;
+  isNew: boolean;
+  isBestSeller: boolean;
+  isTrending: boolean;
+  isLimited: boolean;
+}
 
 type AdminTab = "overview" | "products" | "orders" | "customers";
 
 export function AdminDashboard() {
-  const { navigate, logout, allProducts, updateProductSale, toast } = useApp();
+  const { navigate, logout, allProducts, updateProductSale, updateProductDetails, toast } = useApp();
   const [tab, setTab] = useState<AdminTab>("overview");
   const [searchQ, setSearchQ] = useState("");
   const [orders, setOrders] = useState<OrderDto[]>([]);
@@ -81,6 +108,10 @@ export function AdminDashboard() {
   const [orderSearchQ, setOrderSearchQ] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("All");
   const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productForm, setProductForm] = useState<ProductEditForm | null>(null);
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   
   // Sale Setting State
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
@@ -177,6 +208,125 @@ export function AdminDashboard() {
     } finally {
       setSavingOrderId(null);
     }
+  };
+
+  const startEditingProduct = (product: Product) => {
+    setEditingProduct(product);
+    setProductForm({
+      name: product.name,
+      brand: product.brand,
+      price: product.price.toString(),
+      originalPrice: product.originalPrice?.toString() ?? "",
+      discount: product.discount?.toString() ?? "",
+      category: product.category,
+      subcategory: product.subcategory,
+      description: product.description,
+      colors: product.colors.join(", "),
+      sizes: product.sizes.join(", "),
+      images: product.images.join("\n"),
+      tags: product.tags.join(", "),
+      material: product.specs.Material ?? "",
+      care: product.specs.Care ?? "",
+      fit: product.specs.Fit ?? "",
+      inStock: product.inStock,
+      isNew: !!product.isNew,
+      isBestSeller: !!product.isBestSeller,
+      isTrending: !!product.isTrending,
+      isLimited: !!product.isLimited,
+    });
+  };
+
+  const updateProductForm = <K extends keyof ProductEditForm>(field: K, value: ProductEditForm[K]) => {
+    setProductForm((prev) => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const splitList = (value: string) => value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+
+  const buildProductPayload = (product: Product, form: ProductEditForm): ProductUpsertPayload => {
+    const specs: Record<string, string> = {};
+    if (form.material.trim()) specs.Material = form.material.trim();
+    if (form.care.trim()) specs.Care = form.care.trim();
+    if (form.fit.trim()) specs.Fit = form.fit.trim();
+
+    return {
+      id: product.id,
+      name: form.name.trim(),
+      brand: form.brand.trim(),
+      price: Number(form.price) || 0,
+      originalPrice: form.originalPrice.trim() ? Number(form.originalPrice) : null,
+      discount: form.discount.trim() ? Number(form.discount) : null,
+      rating: product.rating,
+      reviewsCount: product.reviews,
+      category: form.category,
+      subcategory: form.subcategory.trim(),
+      description: form.description.trim(),
+      isNew: form.isNew,
+      isBestSeller: form.isBestSeller,
+      isTrending: form.isTrending,
+      isLimited: form.isLimited,
+      inStock: form.inStock,
+      colors: splitList(form.colors),
+      sizes: splitList(form.sizes),
+      images: splitList(form.images),
+      specs,
+      tags: splitList(form.tags),
+    };
+  };
+
+  const saveProduct = async () => {
+    if (!editingProduct || !productForm) return;
+
+    const images = splitList(productForm.images);
+    if (!productForm.name.trim() || !productForm.brand.trim() || !productForm.subcategory.trim()) {
+      toast("Name, brand, and subcategory are required", "error");
+      return;
+    }
+
+    if (images.length === 0) {
+      toast("Add at least one product image URL", "error");
+      return;
+    }
+
+    setSavingProduct(true);
+    try {
+      await updateProductDetails(editingProduct.id, buildProductPayload(editingProduct, productForm));
+      toast("Product updated successfully");
+      setEditingProduct(null);
+      setProductForm(null);
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not update product", "error");
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
+  const handleProductImageUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !productForm) return;
+
+    setUploadingImages(true);
+    try {
+      const uploadedUrls = await Promise.all(Array.from(files).map((file) => uploadProductImage(file)));
+      const currentImages = splitList(productForm.images);
+      updateProductForm("images", [...currentImages, ...uploadedUrls].join("\n"));
+      toast(`${uploadedUrls.length} image${uploadedUrls.length > 1 ? "s" : ""} uploaded`);
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not upload images", "error");
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const removeProductImage = (imageUrl: string) => {
+    if (!productForm) return;
+    updateProductForm("images", splitList(productForm.images).filter((url) => url !== imageUrl).join("\n"));
+  };
+
+  const makeProductImagePrimary = (imageUrl: string) => {
+    if (!productForm) return;
+    const imageUrls = splitList(productForm.images);
+    updateProductForm("images", [imageUrl, ...imageUrls.filter((url) => url !== imageUrl)].join("\n"));
   };
 
   return (
@@ -465,7 +615,10 @@ export function AdminDashboard() {
                           >
                             <Eye size={14} />
                           </button>
-                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] transition-colors text-[var(--muted-foreground)]">
+                          <button
+                            onClick={() => startEditingProduct(p)}
+                            className="p-1.5 rounded-lg hover:bg-[var(--background)] transition-colors text-[var(--muted-foreground)]"
+                          >
                             <Edit3 size={14} />
                           </button>
                           <button className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-400">
@@ -739,6 +892,224 @@ export function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {editingProduct && productForm && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4 py-8">
+            <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--background)] shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-6 py-4">
+                <div>
+                  <h2 className="text-xl font-black">Edit Product</h2>
+                  <p className="text-xs text-[var(--muted-foreground)] font-mono">{editingProduct.id}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setProductForm(null);
+                  }}
+                  className="p-2 rounded-xl hover:bg-[var(--accent)]"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid lg:grid-cols-[1fr_320px] gap-6 p-6">
+                <div className="space-y-5">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Name</span>
+                      <input value={productForm.name} onChange={(e) => updateProductForm("name", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Brand</span>
+                      <input value={productForm.brand} onChange={(e) => updateProductForm("brand", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Price</span>
+                      <input type="number" value={productForm.price} onChange={(e) => updateProductForm("price", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Original Price</span>
+                      <input type="number" value={productForm.originalPrice} onChange={(e) => updateProductForm("originalPrice", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Discount %</span>
+                      <input type="number" min="0" max="100" value={productForm.discount} onChange={(e) => updateProductForm("discount", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Category</span>
+                      <select value={productForm.category} onChange={(e) => updateProductForm("category", e.target.value as Product["category"])} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none">
+                        {productCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+                      </select>
+                    </label>
+                    <label className="space-y-1.5 sm:col-span-2">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Subcategory</span>
+                      <input value={productForm.subcategory} onChange={(e) => updateProductForm("subcategory", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                  </div>
+
+                  <label className="space-y-1.5 block">
+                    <span className="text-xs font-semibold text-[var(--muted-foreground)]">Description</span>
+                    <textarea value={productForm.description} onChange={(e) => updateProductForm("description", e.target.value)} rows={4} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none resize-none" />
+                  </label>
+
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Colors</span>
+                      <input value={productForm.colors} onChange={(e) => updateProductForm("colors", e.target.value)} placeholder="#111, #fff" className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Sizes</span>
+                      <input value={productForm.sizes} onChange={(e) => updateProductForm("sizes", e.target.value)} placeholder="S, M, L" className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Tags</span>
+                      <input value={productForm.tags} onChange={(e) => updateProductForm("tags", e.target.value)} placeholder="suit, formal" className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                  </div>
+
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Material</span>
+                      <input value={productForm.material} onChange={(e) => updateProductForm("material", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Care</span>
+                      <input value={productForm.care} onChange={(e) => updateProductForm("care", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Fit</span>
+                      <input value={productForm.fit} onChange={(e) => updateProductForm("fit", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                    </label>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-[var(--muted-foreground)]">Import Google Flow Image URLs</span>
+                      <span className="text-[10px] text-[var(--muted-foreground)]">One URL per line</span>
+                    </div>
+                    <textarea
+                      value={productForm.images}
+                      onChange={(e) => updateProductForm("images", e.target.value)}
+                      rows={5}
+                      placeholder="https://..."
+                      className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none resize-none font-mono"
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--border)] p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold">Upload images from computer</p>
+                        <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                          Select images exported from Google Flow. Uploaded URLs are added above automatically.
+                        </p>
+                      </div>
+                      <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-[var(--foreground)] px-4 py-2 text-sm font-semibold text-[var(--background)] disabled:opacity-60">
+                        {uploadingImages ? "Uploading..." : "Choose Files"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={uploadingImages}
+                          onChange={(event) => {
+                            void handleProductImageUpload(event.target.files);
+                            event.target.value = "";
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-5 gap-3">
+                    {[
+                      ["inStock", "In Stock"],
+                      ["isNew", "New"],
+                      ["isBestSeller", "Best Seller"],
+                      ["isTrending", "Trending"],
+                      ["isLimited", "Limited"],
+                    ].map(([field, label]) => (
+                      <label key={field} className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium">
+                        <input
+                          type="checkbox"
+                          checked={!!productForm[field as keyof ProductEditForm]}
+                          onChange={(e) => updateProductForm(field as keyof ProductEditForm, e.target.checked as never)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <aside className="space-y-4">
+                  <div className="rounded-2xl border border-[var(--border)] p-4">
+                    <h3 className="text-sm font-bold mb-3">Image Preview</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {splitList(productForm.images).map((imageUrl, index) => (
+                        <div key={`${imageUrl}-${index}`} className="space-y-2">
+                          <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-[var(--accent)]">
+                            <img src={imageUrl} alt={`Product preview ${index + 1}`} className="w-full h-full object-cover" />
+                            {index === 0 && (
+                              <span className="absolute left-2 top-2 rounded-full bg-[var(--foreground)] px-2 py-0.5 text-[10px] font-bold text-[var(--background)]">
+                                Main
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => makeProductImagePrimary(imageUrl)}
+                              disabled={index === 0}
+                              className="rounded-lg border border-[var(--border)] px-2 py-1 text-[10px] font-semibold disabled:opacity-50"
+                            >
+                              Set Main
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeProductImage(imageUrl)}
+                              className="rounded-lg border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-500"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {splitList(productForm.images).length === 0 && (
+                      <p className="text-xs text-[var(--muted-foreground)] py-8 text-center">Paste image URLs to preview them here.</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--border)] p-4">
+                    <h3 className="text-sm font-bold mb-2">Google Flow workflow</h3>
+                    <p className="text-xs leading-relaxed text-[var(--muted-foreground)]">
+                      Generate images in Google Flow, upload them to a public image host, then paste the public URLs above. The first URL becomes the main product image.
+                    </p>
+                  </div>
+                </aside>
+              </div>
+
+              <div className="sticky bottom-0 flex justify-end gap-3 border-t border-[var(--border)] bg-[var(--background)] px-6 py-4">
+                <button
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setProductForm(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-[var(--border)] text-sm font-medium hover:bg-[var(--accent)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveProduct}
+                  disabled={savingProduct}
+                  className="px-5 py-2 rounded-xl bg-[var(--foreground)] text-[var(--background)] text-sm font-semibold disabled:opacity-60"
+                >
+                  {savingProduct ? "Saving..." : "Save Product"}
+                </button>
+              </div>
             </div>
           </div>
         )}

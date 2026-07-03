@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { products as initialProducts, type Product } from "../data/products";
-import { fetchProducts, fetchWishlist, toggleWishlistItem as apiToggleWishlistItem, updateProductSale as apiUpdateProductSale } from "../api/productsApi";
+import { fetchProducts, fetchWishlist, toggleWishlistItem as apiToggleWishlistItem, updateProduct as apiUpdateProduct, updateProductSale as apiUpdateProductSale, type ProductUpsertPayload } from "../api/productsApi";
 import { login as apiLogin, register as apiRegister, getMe as apiGetMe } from "../api/authApi";
 
 export interface CartItem {
@@ -23,6 +23,7 @@ interface AppContextType {
   // Products
   allProducts: Product[];
   updateProductSale: (productId: string, discount: number | undefined) => void;
+  updateProductDetails: (productId: string, payload: ProductUpsertPayload) => Promise<Product>;
 
   // Cart
   cartItems: CartItem[];
@@ -158,6 +159,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return p;
       })
     );
+  };
+
+  const replaceProductEverywhere = (updatedProduct: Product) => {
+    setAllProducts((prev) => prev.map((product) => product.id === updatedProduct.id ? updatedProduct : product));
+    setWishlist((prev) => prev.map((product) => product.id === updatedProduct.id ? updatedProduct : product));
+    setCartItems((prev) =>
+      prev.map((item) => item.product.id === updatedProduct.id ? { ...item, product: updatedProduct } : item)
+    );
+  };
+
+  const updateProductDetails = async (productId: string, payload: ProductUpsertPayload) => {
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      throw new Error("Please sign in again.");
+    }
+
+    const updatedProduct = await apiUpdateProduct(productId, payload, token);
+    replaceProductEverywhere(updatedProduct);
+    return updatedProduct;
   };
 
   const addToCart = (product: Product, size: string, color: string, qty = 1) => {
@@ -335,7 +355,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        allProducts, updateProductSale,
+        allProducts, updateProductSale, updateProductDetails,
         cartItems, addToCart, removeFromCart, updateCartQty, cartCount, cartTotal, clearCart,
         wishlist, toggleWishlist, isWishlisted,
         user, isLoggedIn: !!user, login, logout, register,
