@@ -7,11 +7,11 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useApp } from "../../context/AppContext";
-import { fetchAllOrders, updateOrderStatus, type OrderDto } from "../../api/ordersApi";
+import { deleteOrder, fetchAllOrders, updateOrderStatus, type OrderDto } from "../../api/ordersApi";
 import type { Product } from "../../data/products";
 import type { ProductUpsertPayload } from "../../api/productsApi";
 import { uploadProductImage } from "../../api/cloudinaryApi";
-import { fetchAdminCustomers, type AdminCustomerDto } from "../../api/customersApi";
+import { deleteAdminCustomer, fetchAdminCustomers, type AdminCustomerDto } from "../../api/customersApi";
 
 const revenueData = [
   { month: "Jan", revenue: 42000, orders: 320 },
@@ -65,6 +65,11 @@ const paymentStatusColors: Record<string, string> = {
 const orderStatusOptions = ["Pending", "Processing", "In Transit", "Delivered", "Cancelled"];
 const paymentStatusOptions = ["Pending", "AwaitingTransfer", "Paid", "Failed", "Refunded"];
 const productCategories: Product["category"][] = ["men", "shoes", "accessories"];
+const productSubcategories: Record<Product["category"], string[]> = {
+  men: ["Suits", "Shirts", "Knitwear", "Trousers", "Outerwear"],
+  shoes: ["Formal", "Sneakers", "Boots", "Loafers"],
+  accessories: ["Watches", "Bags", "Belts", "Sunglasses", "Jewelry"],
+};
 
 interface ProductEditForm {
   id: string;
@@ -93,7 +98,7 @@ interface ProductEditForm {
 type AdminTab = "overview" | "products" | "orders" | "customers";
 
 export function AdminDashboard() {
-  const { navigate, logout, allProducts, updateProductSale, updateProductDetails, createProduct, toast } = useApp();
+  const { navigate, logout, allProducts, updateProductSale, updateProductDetails, createProduct, deleteProduct, toast, user } = useApp();
   const [tab, setTab] = useState<AdminTab>("overview");
   const [searchQ, setSearchQ] = useState("");
   const [orders, setOrders] = useState<OrderDto[]>([]);
@@ -289,7 +294,7 @@ export function AdminDashboard() {
       originalPrice: "",
       discount: "",
       category: "men",
-      subcategory: "",
+      subcategory: productSubcategories.men[0],
       description: "",
       colors: "#1a1a1a",
       sizes: "S, M, L, XL",
@@ -374,6 +379,64 @@ export function AdminDashboard() {
       toast(error?.message || "Could not save product", "error");
     } finally {
       setSavingProduct(false);
+    }
+  };
+
+  const handleDeleteProduct = async (product: Product) => {
+    if (!window.confirm(`Delete product "${product.name}"? This action cannot be undone.`)) return;
+
+    try {
+      await deleteProduct(product.id);
+      toast("Product deleted successfully");
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not delete product", "error");
+    }
+  };
+
+  const handleDeleteOrder = async (order: OrderDto) => {
+    if (!window.confirm(`Delete order ${order.id}? This action cannot be undone.`)) return;
+
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      toast("Please sign in again", "error");
+      navigate("auth", { mode: "login" });
+      return;
+    }
+
+    try {
+      await deleteOrder(token, order.id);
+      setOrders((prev) => prev.filter((item) => item.id !== order.id));
+      toast("Order deleted successfully");
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not delete order", "error");
+    }
+  };
+
+  const handleDeleteCustomer = async (customer: AdminCustomerDto) => {
+    if (customer.id === user?.id) {
+      toast("You cannot delete your own admin account", "error");
+      return;
+    }
+
+    if (!window.confirm(`Delete customer "${customer.name}" and their orders? This action cannot be undone.`)) return;
+
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      toast("Please sign in again", "error");
+      navigate("auth", { mode: "login" });
+      return;
+    }
+
+    try {
+      await deleteAdminCustomer(token, customer.id);
+      setCustomers((prev) => prev.filter((item) => item.id !== customer.id));
+      setOrders((prev) => prev.filter((order) => order.userId !== customer.id));
+      toast("Customer deleted successfully");
+    } catch (error: any) {
+      console.error(error);
+      toast(error?.message || "Could not delete customer", "error");
     }
   };
 
@@ -700,7 +763,10 @@ export function AdminDashboard() {
                           >
                             <Edit3 size={14} />
                           </button>
-                          <button className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-400">
+                          <button
+                            onClick={() => handleDeleteProduct(p)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-400"
+                          >
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -709,7 +775,7 @@ export function AdminDashboard() {
                   ))}
                   {currentProducts.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-5 py-8 text-center text-sm text-[var(--muted-foreground)]">
+                      <td colSpan={7} className="px-5 py-8 text-center text-sm text-[var(--muted-foreground)]">
                         No products found.
                       </td>
                     </tr>
@@ -856,6 +922,12 @@ export function AdminDashboard() {
                           >
                             <Eye size={14} />
                           </button>
+                          <button
+                            onClick={() => handleDeleteOrder(order)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -948,7 +1020,7 @@ export function AdminDashboard() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    {["Customer ID", "Name / Email", "Tier", "Orders", "Total Spent", "Last Order", "Member Since"].map((h) => (
+                    {["Customer ID", "Name / Email", "Tier", "Orders", "Total Spent", "Last Order", "Member Since", "Actions"].map((h) => (
                       <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                         {h}
                       </th>
@@ -982,18 +1054,27 @@ export function AdminDashboard() {
                         {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString() : "-"}
                       </td>
                       <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">{new Date(customer.createdAt).toLocaleDateString()}</td>
+                      <td className="px-5 py-4">
+                        <button
+                          onClick={() => handleDeleteCustomer(customer)}
+                          disabled={customer.id === user?.id}
+                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {!customersLoading && customers.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">
+                      <td colSpan={8} className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">
                         No customers found.
                       </td>
                     </tr>
                   )}
                   {customersLoading && (
                     <tr>
-                      <td colSpan={7} className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">
+                      <td colSpan={8} className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">
                         Loading customers...
                       </td>
                     </tr>
@@ -1058,13 +1139,32 @@ export function AdminDashboard() {
                     </label>
                     <label className="space-y-1.5">
                       <span className="text-xs font-semibold text-[var(--muted-foreground)]">Category</span>
-                      <select value={productForm.category} onChange={(e) => updateProductForm("category", e.target.value as Product["category"])} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none">
+                      <select
+                        value={productForm.category}
+                        onChange={(e) => {
+                          const category = e.target.value as Product["category"];
+                          setProductForm((prev) => prev ? {
+                            ...prev,
+                            category,
+                            subcategory: productSubcategories[category][0],
+                          } : prev);
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none"
+                      >
                         {productCategories.map((category) => <option key={category} value={category}>{category}</option>)}
                       </select>
                     </label>
                     <label className="space-y-1.5 sm:col-span-2">
                       <span className="text-xs font-semibold text-[var(--muted-foreground)]">Subcategory</span>
-                      <input value={productForm.subcategory} onChange={(e) => updateProductForm("subcategory", e.target.value)} className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none" />
+                      <select
+                        value={productForm.subcategory}
+                        onChange={(e) => updateProductForm("subcategory", e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none"
+                      >
+                        {productSubcategories[productForm.category].map((subcategory) => (
+                          <option key={subcategory} value={subcategory}>{subcategory}</option>
+                        ))}
+                      </select>
                     </label>
                   </div>
 

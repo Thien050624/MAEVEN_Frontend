@@ -120,3 +120,15 @@ export async function updateOrderStatus(
 
   return response.json();
 }
+
+export async function deleteOrder(token: string, orderId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to delete order: ${response.status}`);
+  }
+}

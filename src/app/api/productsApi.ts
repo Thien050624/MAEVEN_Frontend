@@ -183,6 +183,20 @@ export async function createProduct(payload: ProductUpsertPayload, token: string
   return mapProductApiToProduct(data);
 }
 
+export async function deleteProduct(productId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to delete product: ${response.status}`);
+  }
+}
+
 export async function fetchWishlist(token: string): Promise<Product[]> {
   const response = await fetch(`${API_BASE_URL}/wishlist`, {
     headers: {
