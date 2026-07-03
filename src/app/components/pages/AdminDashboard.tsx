@@ -1,0 +1,586 @@
+import { useState } from "react";
+import { motion } from "motion/react";
+import {
+  BarChart3, TrendingUp, Users, Package, DollarSign, ShoppingCart,
+  ArrowUpRight, ArrowDownRight, Search, Filter, Eye, Edit3, Trash2,
+  Plus, Star, AlertCircle, CheckCircle, LogOut, ChevronLeft, ChevronRight
+} from "lucide-react";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { useApp } from "../../context/AppContext";
+
+const revenueData = [
+  { month: "Jan", revenue: 42000, orders: 320 },
+  { month: "Feb", revenue: 51000, orders: 410 },
+  { month: "Mar", revenue: 48000, orders: 380 },
+  { month: "Apr", revenue: 65000, orders: 520 },
+  { month: "May", revenue: 71000, orders: 590 },
+  { month: "Jun", revenue: 85000, orders: 680 },
+];
+
+const categoryData = [
+  { name: "Suits & Tailoring", value: 45, color: "#1a1a1a" },
+  { name: "Casual Wear", value: 35, color: "#4a4a4a" },
+  { name: "Accessories & Shoes", value: 20, color: "#8b8b8b" },
+];
+
+const topProducts = [
+  { name: "Italian Wool Suit", sales: 234, revenue: 44226, trend: 12 },
+  { name: "Cashmere Turtleneck", sales: 187, revenue: 30855, trend: 8 },
+  { name: "Premium Leather Briefcase", sales: 89, revenue: 35155, trend: -3 },
+  { name: "Structured Linen Blazer", sales: 156, revenue: 38220, trend: 21 },
+  { name: "Straight Leg Trousers", sales: 203, revenue: 24360, trend: 15 },
+];
+
+const recentOrders = [
+  { id: "MAE-184523", customer: "Alexandra R.", items: 2, total: 334, status: "Delivered", date: "2026-06-05" },
+  { id: "MAE-184520", customer: "Marcus W.", items: 1, total: 245, status: "Processing", date: "2026-06-05" },
+  { id: "MAE-184518", customer: "Sophie L.", items: 3, total: 529, status: "In Transit", date: "2026-06-04" },
+  { id: "MAE-184515", customer: "Mia K.", items: 1, total: 189, status: "Delivered", date: "2026-06-04" },
+  { id: "MAE-184512", customer: "James T.", items: 4, total: 780, status: "Processing", date: "2026-06-03" },
+  { id: "MAE-184511", customer: "Liam P.", items: 2, total: 290, status: "Delivered", date: "2026-06-02" },
+  { id: "MAE-184510", customer: "Olivia M.", items: 1, total: 145, status: "Cancelled", date: "2026-06-02" },
+];
+
+const customersList = [
+  { id: "C-001", name: "Alexandra Rivera", email: "alex@example.com", orders: 12, spent: 4250, date: "2026-01-15" },
+  { id: "C-002", name: "Marcus Williams", email: "marcus@example.com", orders: 8, spent: 2100, date: "2026-02-04" },
+  { id: "C-003", name: "Sophie Laurent", email: "sophie@example.com", orders: 15, spent: 6800, date: "2025-11-20" },
+  { id: "C-004", name: "James Taylor", email: "james@example.com", orders: 3, spent: 850, date: "2026-04-12" },
+  { id: "C-005", name: "Mia Kensington", email: "mia@example.com", orders: 5, spent: 1450, date: "2026-03-28" },
+  { id: "C-006", name: "Lucas Vance", email: "lucas@example.com", orders: 1, spent: 125, date: "2026-06-01" },
+];
+
+const statusColors: Record<string, string> = {
+  Delivered: "bg-green-100 text-green-700",
+  "In Transit": "bg-blue-100 text-blue-700",
+  Processing: "bg-amber-100 text-amber-700",
+  Cancelled: "bg-red-100 text-red-600",
+};
+
+type AdminTab = "overview" | "products" | "orders" | "customers";
+
+export function AdminDashboard() {
+  const { navigate, logout, allProducts, updateProductSale, toast } = useApp();
+  const [tab, setTab] = useState<AdminTab>("overview");
+  const [searchQ, setSearchQ] = useState("");
+  
+  // Sale Setting State
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+  const [salePercentage, setSalePercentage] = useState<string>("");
+  
+  // Pagination States
+  const [productsPage, setProductsPage] = useState(1);
+  const productsPerPage = 5;
+  const filteredProducts = allProducts.filter((p) => !searchQ || p.name.toLowerCase().includes(searchQ.toLowerCase()) || p.brand.toLowerCase().includes(searchQ.toLowerCase()));
+  const totalProductPages = Math.ceil(filteredProducts.length / productsPerPage);
+  const currentProducts = filteredProducts.slice((productsPage - 1) * productsPerPage, productsPage * productsPerPage);
+
+  const [ordersPage, setOrdersPage] = useState(1);
+  const ordersPerPage = 5;
+  const totalOrderPages = Math.ceil(recentOrders.length / ordersPerPage);
+  const currentOrders = recentOrders.slice((ordersPage - 1) * ordersPerPage, ordersPage * ordersPerPage);
+
+  const stats = [
+    { label: "Total Revenue", value: "$362,000", change: "+18.2%", positive: true, icon: DollarSign },
+    { label: "Total Orders", value: "2,900", change: "+12.5%", positive: true, icon: ShoppingCart },
+    { label: "Active Customers", value: "18,432", change: "+8.1%", positive: true, icon: Users },
+    { label: "Products", value: "642", change: "-2.3%", positive: false, icon: Package },
+  ];
+
+  const handleLogout = () => {
+    logout();
+    navigate("home");
+  };
+
+  return (
+    <div className="min-h-screen bg-[var(--background)]">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-10">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight">Admin Dashboard</h1>
+            <p className="text-sm text-[var(--muted-foreground)]">Welcome back — here's what's happening today</p>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => navigate("home")} className="px-4 py-2 text-sm border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors">
+              View Store
+            </button>
+            <button onClick={handleLogout} className="px-4 py-2 text-sm border border-[var(--border)] rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors flex items-center gap-2">
+              <LogOut size={14} /> Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 border-b border-[var(--border)] mb-8">
+          {(["overview", "products", "orders", "customers"] as AdminTab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => {
+                setTab(t);
+                setSearchQ("");
+              }}
+              className={`px-5 py-3 text-sm font-medium capitalize transition-colors relative ${
+                tab === t ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              {t}
+              {tab === t && (
+                <motion.div layoutId="adminTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--foreground)]" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {tab === "overview" && (
+          <div className="space-y-6">
+            {/* Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {stats.map(({ label, value, change, positive, icon: Icon }) => (
+                <motion.div
+                  key={label}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-[var(--card)] rounded-2xl p-5"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-[var(--accent)] flex items-center justify-center">
+                      <Icon size={18} />
+                    </div>
+                    <div className={`flex items-center gap-1 text-xs font-semibold ${positive ? "text-green-600" : "text-red-500"}`}>
+                      {positive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                      {change}
+                    </div>
+                  </div>
+                  <p className="text-2xl font-black">{value}</p>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">{label}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Revenue Chart */}
+            <div className="grid lg:grid-cols-[1fr_320px] gap-6">
+              <div className="bg-[var(--card)] rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-bold text-lg">Revenue Overview</h3>
+                  <select className="text-sm border border-[var(--border)] rounded-lg px-3 py-1.5 bg-[var(--background)] outline-none">
+                    <option>Last 6 months</option>
+                    <option>Last year</option>
+                  </select>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <AreaChart data={revenueData}>
+                    <defs>
+                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#1a1a1a" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#1a1a1a" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip
+                      contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12 }}
+                      formatter={(v: number) => [`$${v.toLocaleString()}`, "Revenue"]}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke="#1a1a1a" strokeWidth={2} fill="url(#revGrad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Category Split */}
+              <div className="bg-[var(--card)] rounded-2xl p-6">
+                <h3 className="font-bold text-lg mb-6">Sales by Category</h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={categoryData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+                      {categoryData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => [`${v}%`, ""]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 mt-2">
+                  {categoryData.map((cat) => (
+                    <div key={cat.name} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
+                        <span className="text-[var(--muted-foreground)]">{cat.name}</span>
+                      </div>
+                      <span className="font-semibold">{cat.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Top Products + Recent Orders */}
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Top Products */}
+              <div className="bg-[var(--card)] rounded-2xl p-6">
+                <h3 className="font-bold text-lg mb-5">Top Products</h3>
+                <div className="space-y-4">
+                  {topProducts.map((p, i) => (
+                    <div key={p.name} className="flex items-center gap-3">
+                      <span className="text-sm font-black text-[var(--muted-foreground)] w-4">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{p.name}</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">{p.sales} sold · ${p.revenue.toLocaleString()}</p>
+                      </div>
+                      <div className={`flex items-center gap-1 text-xs font-semibold ${p.trend > 0 ? "text-green-600" : "text-red-500"}`}>
+                        {p.trend > 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                        {Math.abs(p.trend)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent Orders */}
+              <div className="bg-[var(--card)] rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-bold text-lg">Recent Orders</h3>
+                  <button onClick={() => setTab("orders")} className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">View All</button>
+                </div>
+                <div className="space-y-3">
+                  {recentOrders.slice(0, 4).map((order) => (
+                    <div key={order.id} className="flex items-center gap-3 py-2 border-b border-[var(--border)] last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold font-mono">{order.id}</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">{order.customer}</p>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColors[order.status]}`}>
+                        {order.status}
+                      </span>
+                      <span className="text-sm font-bold">${order.total}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === "products" && (
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex-1 relative">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                <input
+                  value={searchQ}
+                  onChange={(e) => {
+                    setSearchQ(e.target.value);
+                    setProductsPage(1);
+                  }}
+                  placeholder="Search products..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none focus:border-[var(--foreground)] transition-colors"
+                />
+              </div>
+              <button className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border)] rounded-xl text-sm">
+                <Filter size={14} /> Filter
+              </button>
+              <button className="flex items-center gap-2 px-4 py-2.5 bg-[var(--foreground)] text-[var(--background)] rounded-xl text-sm font-medium">
+                <Plus size={14} /> Add Product
+              </button>
+            </div>
+
+            <div className="bg-[var(--card)] rounded-2xl overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    {["Product", "Category", "Price", "Sale", "Stock", "Rating", "Actions"].map((h) => (
+                      <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentProducts.map((p) => (
+                    <tr key={p.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)] transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <img src={p.images[0]} alt={p.name} className="w-10 h-12 rounded-lg object-cover" />
+                          <div>
+                            <p className="text-sm font-semibold">{p.name}</p>
+                            <p className="text-xs text-[var(--muted-foreground)]">{p.brand}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-sm capitalize text-[var(--muted-foreground)]">{p.category}</td>
+                      <td className="px-5 py-4 text-sm font-semibold">
+                        ${p.price}
+                        {p.originalPrice && <span className="ml-2 text-xs line-through text-[var(--muted-foreground)]">${p.originalPrice}</span>}
+                      </td>
+                      <td className="px-5 py-4">
+                        {editingSaleId === p.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={salePercentage}
+                              onChange={(e) => setSalePercentage(e.target.value)}
+                              className="w-16 px-2 py-1 text-xs border border-[var(--border)] rounded outline-none bg-[var(--background)]"
+                              placeholder="%"
+                            />
+                            <button
+                              onClick={() => {
+                                const val = parseInt(salePercentage, 10);
+                                updateProductSale(p.id, isNaN(val) ? undefined : val);
+                                setEditingSaleId(null);
+                                toast("Sale percentage updated successfully");
+                              }}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              <CheckCircle size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingSaleId(p.id);
+                              setSalePercentage(p.discount ? p.discount.toString() : "");
+                            }}
+                            className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
+                          >
+                            {p.discount ? `${p.discount}% OFF` : "Set Sale"}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        {p.inStock ? (
+                          <span className="flex items-center gap-1 text-xs text-green-600">
+                            <CheckCircle size={12} /> In Stock
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-red-500">
+                            <AlertCircle size={12} /> Out of Stock
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-1">
+                          <Star size={12} className="text-amber-400 fill-amber-400" />
+                          <span className="text-sm">{p.rating}</span>
+                          <span className="text-xs text-[var(--muted-foreground)]">({p.reviews})</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => navigate("product", { productId: p.id })}
+                            className="p-1.5 rounded-lg hover:bg-[var(--background)] transition-colors text-[var(--muted-foreground)]"
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] transition-colors text-[var(--muted-foreground)]">
+                            <Edit3 size={14} />
+                          </button>
+                          <button className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-400">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {currentProducts.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-8 text-center text-sm text-[var(--muted-foreground)]">
+                        No products found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Pagination */}
+              {totalProductPages > 1 && (
+                <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border)]">
+                  <span className="text-xs text-[var(--muted-foreground)]">
+                    Showing {(productsPage - 1) * productsPerPage + 1} to {Math.min(productsPage * productsPerPage, filteredProducts.length)} of {filteredProducts.length} entries
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setProductsPage(Math.max(1, productsPage - 1))}
+                      disabled={productsPage === 1}
+                      className="p-1 rounded hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    {Array.from({ length: totalProductPages }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setProductsPage(i + 1)}
+                        className={`w-7 h-7 flex items-center justify-center rounded text-xs font-medium ${
+                          productsPage === i + 1 ? "bg-[var(--foreground)] text-[var(--background)]" : "hover:bg-[var(--accent)]"
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setProductsPage(Math.min(totalProductPages, productsPage + 1))}
+                      disabled={productsPage === totalProductPages}
+                      className="p-1 rounded hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === "orders" && (
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex-1 relative">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                <input placeholder="Search orders..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)] text-sm outline-none focus:border-[var(--foreground)] transition-colors" />
+              </div>
+              <select className="px-4 py-2.5 border border-[var(--border)] rounded-xl text-sm bg-[var(--background)] outline-none">
+                <option>All Status</option>
+                <option>Processing</option>
+                <option>In Transit</option>
+                <option>Delivered</option>
+                <option>Cancelled</option>
+              </select>
+            </div>
+
+            <div className="bg-[var(--card)] rounded-2xl overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    {["Order ID", "Customer", "Date", "Items", "Total", "Status", "Actions"].map((h) => (
+                      <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentOrders.map((order) => (
+                    <tr key={order.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)] transition-colors">
+                      <td className="px-5 py-4 text-sm font-mono font-semibold">{order.id}</td>
+                      <td className="px-5 py-4 text-sm">{order.customer}</td>
+                      <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">{order.date}</td>
+                      <td className="px-5 py-4 text-sm">{order.items}</td>
+                      <td className="px-5 py-4 text-sm font-bold">${order.total}</td>
+                      <td className="px-5 py-4">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[order.status]}`}>{order.status}</span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex gap-2">
+                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"><Eye size={14} /></button>
+                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"><Edit3 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Pagination */}
+              {totalOrderPages > 1 && (
+                <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border)]">
+                  <span className="text-xs text-[var(--muted-foreground)]">
+                    Showing {(ordersPage - 1) * ordersPerPage + 1} to {Math.min(ordersPage * ordersPerPage, recentOrders.length)} of {recentOrders.length} entries
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setOrdersPage(Math.max(1, ordersPage - 1))}
+                      disabled={ordersPage === 1}
+                      className="p-1 rounded hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    {Array.from({ length: totalOrderPages }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setOrdersPage(i + 1)}
+                        className={`w-7 h-7 flex items-center justify-center rounded text-xs font-medium ${
+                          ordersPage === i + 1 ? "bg-[var(--foreground)] text-[var(--background)]" : "hover:bg-[var(--accent)]"
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setOrdersPage(Math.min(totalOrderPages, ordersPage + 1))}
+                      disabled={ordersPage === totalOrderPages}
+                      className="p-1 rounded hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === "customers" && (
+          <div className="space-y-6">
+            <div className="grid md:grid-cols-3 gap-6">
+              {[
+                { label: "Total Customers", value: "18,432", change: "+8.1%" },
+                { label: "New This Month", value: "1,240", change: "+22.3%" },
+                { label: "Avg. Order Value", value: "$247", change: "+5.8%" },
+              ].map(({ label, value, change }) => (
+                <div key={label} className="bg-[var(--card)] rounded-2xl p-6">
+                  <p className="text-3xl font-black mb-1">{value}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">{label}</p>
+                  <p className="text-xs text-green-600 font-semibold mt-2">{change} vs last month</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-[var(--card)] rounded-2xl overflow-hidden">
+              <div className="p-5 border-b border-[var(--border)] flex items-center justify-between">
+                <h3 className="font-bold">Customer Directory</h3>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                  <input placeholder="Search customers..." className="pl-9 pr-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm outline-none focus:border-[var(--foreground)] transition-colors" />
+                </div>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    {["Customer ID", "Name / Email", "Orders", "Total Spent", "Member Since", "Actions"].map((h) => (
+                      <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {customersList.map((customer) => (
+                    <tr key={customer.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)] transition-colors">
+                      <td className="px-5 py-4 text-sm font-mono font-semibold">{customer.id}</td>
+                      <td className="px-5 py-4">
+                        <p className="text-sm font-semibold">{customer.name}</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">{customer.email}</p>
+                      </td>
+                      <td className="px-5 py-4 text-sm">{customer.orders}</td>
+                      <td className="px-5 py-4 text-sm font-bold">${customer.spent.toLocaleString()}</td>
+                      <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">{customer.date}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex gap-2">
+                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"><Eye size={14} /></button>
+                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"><Edit3 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
