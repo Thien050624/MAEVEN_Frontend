@@ -11,6 +11,7 @@ import { fetchAllOrders, updateOrderStatus, type OrderDto } from "../../api/orde
 import type { Product } from "../../data/products";
 import type { ProductUpsertPayload } from "../../api/productsApi";
 import { uploadProductImage } from "../../api/cloudinaryApi";
+import { fetchAdminCustomers, type AdminCustomerDto } from "../../api/customersApi";
 
 const revenueData = [
   { month: "Jan", revenue: 42000, orders: 320 },
@@ -43,15 +44,6 @@ const recentOrders = [
   { id: "MAE-184512", customer: "James T.", items: 4, total: 780, status: "Processing", date: "2026-06-03" },
   { id: "MAE-184511", customer: "Liam P.", items: 2, total: 290, status: "Delivered", date: "2026-06-02" },
   { id: "MAE-184510", customer: "Olivia M.", items: 1, total: 145, status: "Cancelled", date: "2026-06-02" },
-];
-
-const customersList = [
-  { id: "C-001", name: "Alexandra Rivera", email: "alex@example.com", orders: 12, spent: 4250, date: "2026-01-15" },
-  { id: "C-002", name: "Marcus Williams", email: "marcus@example.com", orders: 8, spent: 2100, date: "2026-02-04" },
-  { id: "C-003", name: "Sophie Laurent", email: "sophie@example.com", orders: 15, spent: 6800, date: "2025-11-20" },
-  { id: "C-004", name: "James Taylor", email: "james@example.com", orders: 3, spent: 850, date: "2026-04-12" },
-  { id: "C-005", name: "Mia Kensington", email: "mia@example.com", orders: 5, spent: 1450, date: "2026-03-28" },
-  { id: "C-006", name: "Lucas Vance", email: "lucas@example.com", orders: 1, spent: 125, date: "2026-06-01" },
 ];
 
 const statusColors: Record<string, string> = {
@@ -108,6 +100,9 @@ export function AdminDashboard() {
   const [orderSearchQ, setOrderSearchQ] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("All");
   const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
+  const [customers, setCustomers] = useState<AdminCustomerDto[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customerSearchQ, setCustomerSearchQ] = useState("");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState<ProductEditForm | null>(null);
   const [savingProduct, setSavingProduct] = useState(false);
@@ -168,8 +163,46 @@ export function AdminDashboard() {
     };
   }, [toast]);
 
+  useEffect(() => {
+    const token = localStorage.getItem("maeven_token");
+    if (!token) {
+      setCustomers([]);
+      return;
+    }
+
+    let cancelled = false;
+    setCustomersLoading(true);
+    fetchAdminCustomers(token, customerSearchQ)
+      .then((data) => {
+        if (!cancelled) setCustomers(data);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!cancelled) toast("Could not load customers", "error");
+      })
+      .finally(() => {
+        if (!cancelled) setCustomersLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customerSearchQ, toast]);
+
   const totalRevenue = useMemo(() => orders.reduce((sum, order) => sum + order.total, 0), [orders]);
-  const uniqueCustomers = useMemo(() => new Set(orders.map((order) => order.userId)).size, [orders]);
+  const uniqueCustomers = customers.length;
+  const newCustomersThisMonth = useMemo(() => {
+    const now = new Date();
+    return customers.filter((customer) => {
+      const createdAt = new Date(customer.createdAt);
+      return createdAt.getFullYear() === now.getFullYear() && createdAt.getMonth() === now.getMonth();
+    }).length;
+  }, [customers]);
+  const avgOrderValue = useMemo(() => {
+    const orderCount = customers.reduce((sum, customer) => sum + customer.ordersCount, 0);
+    const spent = customers.reduce((sum, customer) => sum + customer.totalSpent, 0);
+    return orderCount > 0 ? spent / orderCount : 0;
+  }, [customers]);
 
   const stats = [
     { label: "Total Revenue", value: `$${totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, change: "+18.2%", positive: true, icon: DollarSign },
@@ -841,14 +874,14 @@ export function AdminDashboard() {
           <div className="space-y-6">
             <div className="grid md:grid-cols-3 gap-6">
               {[
-                { label: "Total Customers", value: "18,432", change: "+8.1%" },
-                { label: "New This Month", value: "1,240", change: "+22.3%" },
-                { label: "Avg. Order Value", value: "$247", change: "+5.8%" },
-              ].map(({ label, value, change }) => (
+                { label: "Total Customers", value: customers.length.toString(), hint: "Registered accounts" },
+                { label: "New This Month", value: newCustomersThisMonth.toString(), hint: "Joined this month" },
+                { label: "Avg. Order Value", value: `$${avgOrderValue.toFixed(2)}`, hint: "Across customer orders" },
+              ].map(({ label, value, hint }) => (
                 <div key={label} className="bg-[var(--card)] rounded-2xl p-6">
                   <p className="text-3xl font-black mb-1">{value}</p>
                   <p className="text-sm text-[var(--muted-foreground)]">{label}</p>
-                  <p className="text-xs text-green-600 font-semibold mt-2">{change} vs last month</p>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-2">{hint}</p>
                 </div>
               ))}
             </div>
@@ -858,13 +891,18 @@ export function AdminDashboard() {
                 <h3 className="font-bold">Customer Directory</h3>
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
-                  <input placeholder="Search customers..." className="pl-9 pr-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm outline-none focus:border-[var(--foreground)] transition-colors" />
+                  <input
+                    value={customerSearchQ}
+                    onChange={(event) => setCustomerSearchQ(event.target.value)}
+                    placeholder="Search customers..."
+                    className="pl-9 pr-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm outline-none focus:border-[var(--foreground)] transition-colors"
+                  />
                 </div>
               </div>
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    {["Customer ID", "Name / Email", "Orders", "Total Spent", "Member Since", "Actions"].map((h) => (
+                    {["Customer ID", "Name / Email", "Tier", "Orders", "Total Spent", "Last Order", "Member Since"].map((h) => (
                       <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                         {h}
                       </th>
@@ -872,24 +910,48 @@ export function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {customersList.map((customer) => (
+                  {customers.map((customer) => (
                     <tr key={customer.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)] transition-colors">
-                      <td className="px-5 py-4 text-sm font-mono font-semibold">{customer.id}</td>
+                      <td className="px-5 py-4 text-xs font-mono font-semibold">{customer.id.slice(0, 10)}...</td>
                       <td className="px-5 py-4">
-                        <p className="text-sm font-semibold">{customer.name}</p>
-                        <p className="text-xs text-[var(--muted-foreground)]">{customer.email}</p>
-                      </td>
-                      <td className="px-5 py-4 text-sm">{customer.orders}</td>
-                      <td className="px-5 py-4 text-sm font-bold">${customer.spent.toLocaleString()}</td>
-                      <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">{customer.date}</td>
-                      <td className="px-5 py-4">
-                        <div className="flex gap-2">
-                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"><Eye size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"><Edit3 size={14} /></button>
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={customer.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&q=80"}
+                            alt={customer.name}
+                            className="w-9 h-9 rounded-full object-cover bg-[var(--accent)]"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold">{customer.name}</p>
+                            <p className="text-xs text-[var(--muted-foreground)]">{customer.email}</p>
+                            {customer.role === "admin" && <p className="text-[10px] font-bold text-purple-600 mt-0.5">ADMIN</p>}
+                          </div>
                         </div>
                       </td>
+                      <td className="px-5 py-4">
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-[var(--accent)] font-medium">{customer.tier}</span>
+                      </td>
+                      <td className="px-5 py-4 text-sm">{customer.ordersCount}</td>
+                      <td className="px-5 py-4 text-sm font-bold">${customer.totalSpent.toFixed(2)}</td>
+                      <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">
+                        {customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString() : "-"}
+                      </td>
+                      <td className="px-5 py-4 text-sm text-[var(--muted-foreground)]">{new Date(customer.createdAt).toLocaleDateString()}</td>
                     </tr>
                   ))}
+                  {!customersLoading && customers.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">
+                        No customers found.
+                      </td>
+                    </tr>
+                  )}
+                  {customersLoading && (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">
+                        Loading customers...
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
