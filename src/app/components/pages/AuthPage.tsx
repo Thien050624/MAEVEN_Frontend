@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Eye, EyeOff, ArrowRight, Check, Mail, Lock, User } from "lucide-react";
 import { useApp } from "../../context/AppContext";
+import authHeroImage from "../../assets/maeven-auth-hero.jpeg";
 
 type AuthMode = "login" | "register" | "forgot" | "otp";
 
@@ -64,7 +65,7 @@ export function AuthPage() {
     }
   };
 
-  const heroImage = "https://images.unsplash.com/photo-1779399147584-6c479647263b?w=800&q=80";
+  const heroImage = authHeroImage;
 
   return (
     <div className="min-h-screen bg-[var(--background)] flex">
@@ -147,29 +148,6 @@ export function AuthPage() {
                 <div>
                   <h1 className="text-3xl font-black mb-2">Welcome back</h1>
                   <p className="text-[var(--muted-foreground)] text-sm mb-8">Sign in to your MAEVEN account. (Hint: Use <strong>admin@maeven.com</strong> for Admin Access)</p>
-
-                  {/* Social Login */}
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    {[
-                      { label: "Google", icon: "G" },
-                      { label: "Apple", icon: "" },
-                    ].map((s) => (
-                      <button
-                        key={s.label}
-                        onClick={async () => { try { await login("alex.rivera@email.com", "user123"); toast("Signed in with " + s.label + " ✓"); navigate("home"); } catch (err) {} }}
-                        className="flex items-center justify-center gap-2 py-3 border border-[var(--border)] rounded-xl text-sm font-medium hover:bg-[var(--accent)] transition-colors"
-                      >
-                        <span className="text-base">{s.icon}</span> {s.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="flex-1 h-px bg-[var(--border)]" />
-                    <span className="text-xs text-[var(--muted-foreground)]">or continue with email</span>
-                    <div className="flex-1 h-px bg-[var(--border)]" />
-                  </div>
-
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                       <label className="text-sm font-medium mb-1.5 block">Email</label>
