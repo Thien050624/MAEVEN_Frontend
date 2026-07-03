@@ -1,8 +1,20 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import {
-  User, Package, Heart, MapPin, CreditCard, Bell, Settings, LogOut,
-  ChevronRight, Star, Edit3, Plus, Check, Award
+  Award,
+  Bell,
+  Check,
+  ChevronRight,
+  CreditCard,
+  Edit3,
+  Heart,
+  LogOut,
+  MapPin,
+  Package,
+  Plus,
+  Settings,
+  Star,
+  User,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { ProductCard } from "../ProductCard";
@@ -11,10 +23,19 @@ import { fetchMyOrders, type OrderDto } from "../../api/ordersApi";
 type Tab = "overview" | "orders" | "wishlist" | "addresses" | "payment" | "notifications" | "settings";
 
 const statusColors: Record<string, string> = {
+  Pending: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
   Delivered: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400",
   "In Transit": "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
   Processing: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
   Cancelled: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400",
+};
+
+const paymentStatusColors: Record<string, string> = {
+  Pending: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+  AwaitingTransfer: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
+  Paid: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400",
+  Failed: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400",
+  Refunded: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
 };
 
 const navItems: { id: Tab; icon: typeof User; label: string }[] = [
@@ -27,11 +48,25 @@ const navItems: { id: Tab; icon: typeof User; label: string }[] = [
   { id: "settings", icon: Settings, label: "Settings" },
 ];
 
+function getPaymentMethodLabel(method: string) {
+  return method === "cod" ? "Cash on Delivery" : "Bank QR Transfer";
+}
+
+function StatusBadge({ value, type = "order" }: { value: string; type?: "order" | "payment" }) {
+  const colors = type === "payment" ? paymentStatusColors : statusColors;
+  return (
+    <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-semibold ${colors[value] ?? colors.Pending}`}>
+      {value}
+    </span>
+  );
+}
+
 export function AccountDashboard() {
   const { user, logout, navigate, wishlist, pageParams, toast } = useApp();
   const [tab, setTab] = useState<Tab>((pageParams.tab as Tab) || "overview");
   const [orders, setOrders] = useState<OrderDto[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -65,14 +100,23 @@ export function AccountDashboard() {
     };
   }, [user, toast]);
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const tierColors = {
     Silver: "bg-gray-100 text-gray-600",
     Gold: "bg-amber-100 text-amber-700",
     Platinum: "bg-purple-100 text-purple-700",
+  };
+
+  const openOrderDetails = (orderId: string) => {
+    setSelectedOrderId(orderId);
+    setTab("orders");
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("home");
+    toast("Signed out successfully");
   };
 
   return (
@@ -81,9 +125,7 @@ export function AccountDashboard() {
         <h1 className="text-3xl font-black tracking-tight mb-8">My Account</h1>
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-8">
-          {/* Sidebar */}
           <aside>
-            {/* Profile Card */}
             <div className="bg-[var(--card)] rounded-2xl p-6 mb-4 text-center">
               <div className="relative inline-block mb-3">
                 <img src={user.avatar} alt={user.name} className="w-20 h-20 rounded-full object-cover mx-auto" />
@@ -98,25 +140,26 @@ export function AccountDashboard() {
               </span>
             </div>
 
-            {/* Nav */}
             <nav className="bg-[var(--card)] rounded-2xl overflow-hidden">
               {navItems.map(({ id, icon: Icon, label }) => (
                 <button
                   key={id}
                   onClick={() => setTab(id)}
                   className={`w-full flex items-center justify-between px-5 py-4 text-sm font-medium transition-colors border-b border-[var(--border)] last:border-0 ${
-                    tab === id ? "bg-[var(--accent)] text-[var(--foreground)]" : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                    tab === id
+                      ? "bg-[var(--accent)] text-[var(--foreground)]"
+                      : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-3">
                     <Icon size={16} />
                     {label}
-                  </div>
+                  </span>
                   <ChevronRight size={14} />
                 </button>
               ))}
               <button
-                onClick={() => { logout(); navigate("home"); toast("Signed out successfully"); }}
+                onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-5 py-4 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
               >
                 <LogOut size={16} /> Sign Out
@@ -124,11 +167,9 @@ export function AccountDashboard() {
             </nav>
           </aside>
 
-          {/* Main Content */}
           <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
             {tab === "overview" && (
               <div className="space-y-6">
-                {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {[
                     { label: "Total Orders", value: orders.length.toString(), icon: Package },
@@ -146,35 +187,41 @@ export function AccountDashboard() {
                   ))}
                 </div>
 
-                {/* Recent Orders */}
                 <div className="bg-[var(--card)] rounded-2xl p-6">
                   <div className="flex items-center justify-between mb-5">
                     <h3 className="font-bold text-lg">Recent Orders</h3>
-                    <button onClick={() => setTab("orders")} className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">View All</button>
+                    <button onClick={() => setTab("orders")} className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                      View All
+                    </button>
                   </div>
                   <div className="space-y-4">
                     {orders.slice(0, 3).map((order) => (
-                      <div key={order.id} className="flex items-center gap-4 p-3 rounded-xl hover:bg-[var(--accent)] transition-colors">
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => openOrderDetails(order.id)}
+                        className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-[var(--accent)] transition-colors text-left"
+                      >
                         <img src={order.items[0]?.productImage} alt="" className="w-12 h-14 rounded-xl object-cover bg-[var(--accent)]" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold font-mono">{order.id}</p>
                           <p className="text-xs text-[var(--muted-foreground)]">
-                            {new Date(order.createdAt).toLocaleDateString()} · {order.items.length} item{order.items.length > 1 ? "s" : ""}
+                            {new Date(order.createdAt).toLocaleDateString()} - {order.items.length} item{order.items.length > 1 ? "s" : ""}
                           </p>
                         </div>
                         <div className="text-right">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[order.status]}`}>{order.status}</span>
+                          <StatusBadge value={order.status} />
                           <p className="text-sm font-bold mt-1">${order.total.toFixed(2)}</p>
                         </div>
-                      </div>
+                      </button>
                     ))}
+                    {ordersLoading && <p className="text-sm text-[var(--muted-foreground)] py-6 text-center">Loading orders...</p>}
                     {!ordersLoading && orders.length === 0 && (
                       <p className="text-sm text-[var(--muted-foreground)] py-6 text-center">No orders yet.</p>
                     )}
                   </div>
                 </div>
 
-                {/* Loyalty Progress */}
                 <div className="bg-[var(--foreground)] text-[var(--background)] rounded-2xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -208,22 +255,26 @@ export function AccountDashboard() {
                           <p className="font-bold font-mono">{order.id}</p>
                           <p className="text-sm text-[var(--muted-foreground)]">{new Date(order.createdAt).toLocaleString()}</p>
                         </div>
-                        <span className={`text-xs px-3 py-1 rounded-full font-semibold ${statusColors[order.status]}`}>
-                          {order.status}
-                        </span>
+                        <StatusBadge value={order.status} />
                       </div>
+
                       <div className="flex items-center gap-3 border-t border-[var(--border)] pt-4">
                         <img src={order.items[0]?.productImage} alt="" className="w-16 h-20 rounded-xl object-cover bg-[var(--accent)]" />
                         <div className="flex-1">
-                          <p className="text-sm text-[var(--muted-foreground)]">{order.items.length} item{order.items.length > 1 ? "s" : ""}</p>
+                          <p className="text-sm text-[var(--muted-foreground)]">
+                            {order.items.length} item{order.items.length > 1 ? "s" : ""}
+                          </p>
                           <p className="font-bold text-lg">${order.total.toFixed(2)}</p>
                           <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                            {order.paymentMethod === "qr" ? "Bank QR Transfer" : "Cash on Delivery"} · {order.paymentStatus}
+                            {getPaymentMethodLabel(order.paymentMethod)} - {order.paymentStatus}
                           </p>
                         </div>
                         <div className="flex flex-col gap-2">
-                          <button className="px-4 py-2 text-xs font-medium border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors">
-                            View Details
+                          <button
+                            onClick={() => setSelectedOrderId(selectedOrderId === order.id ? null : order.id)}
+                            className="px-4 py-2 text-xs font-medium border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors"
+                          >
+                            {selectedOrderId === order.id ? "Hide Details" : "View Details"}
                           </button>
                           {order.status === "Delivered" && (
                             <button className="px-4 py-2 text-xs font-medium border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors">
@@ -232,8 +283,102 @@ export function AccountDashboard() {
                           )}
                         </div>
                       </div>
+
+                      {selectedOrderId === order.id && (
+                        <div className="mt-5 grid xl:grid-cols-[1fr_320px] gap-5 border-t border-[var(--border)] pt-5">
+                          <div>
+                            <h3 className="text-sm font-bold mb-3">Items purchased</h3>
+                            <div className="space-y-3">
+                              {order.items.map((item) => (
+                                <button
+                                  key={`${order.id}-${item.productId}-${item.size}-${item.color}`}
+                                  type="button"
+                                  onClick={() => navigate("product", { productId: item.productId })}
+                                  className="w-full flex gap-3 rounded-xl border border-[var(--border)] p-3 text-left hover:bg-[var(--accent)] transition-colors"
+                                >
+                                  <img src={item.productImage} alt={item.productName} className="w-16 h-20 rounded-lg object-cover bg-[var(--accent)]" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold truncate">{item.productName}</p>
+                                    <p className="text-xs text-[var(--muted-foreground)] mt-1">Size {item.size} - Color {item.color}</p>
+                                    <p className="text-xs text-[var(--muted-foreground)] mt-1">Qty {item.quantity}</p>
+                                  </div>
+                                  <p className="text-sm font-bold">${(item.unitPrice * item.quantity).toFixed(2)}</p>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="rounded-xl border border-[var(--border)] p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <MapPin size={15} />
+                                <h3 className="text-sm font-bold">Shipping address</h3>
+                              </div>
+                              <p className="text-sm font-semibold">
+                                {order.shippingAddress.firstName} {order.shippingAddress.lastName}
+                              </p>
+                              <p className="text-sm text-[var(--muted-foreground)] mt-1">{order.shippingAddress.phone}</p>
+                              <p className="text-sm text-[var(--muted-foreground)] mt-1">{order.shippingAddress.email}</p>
+                              <p className="text-sm text-[var(--muted-foreground)] mt-1">{order.shippingAddress.address}</p>
+                              <p className="text-sm text-[var(--muted-foreground)] mt-1">{order.shippingAddress.country}</p>
+                            </div>
+
+                            <div className="rounded-xl border border-[var(--border)] p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <CreditCard size={15} />
+                                <h3 className="text-sm font-bold">Payment</h3>
+                              </div>
+                              <p className="text-sm font-semibold">{getPaymentMethodLabel(order.paymentMethod)}</p>
+                              <div className="mt-2">
+                                <StatusBadge value={order.paymentStatus} type="payment" />
+                              </div>
+                              {order.paymentMethod === "qr" && order.paymentStatus !== "Paid" && (
+                                <p className="text-xs text-[var(--muted-foreground)] mt-3">
+                                  Transfer note: {order.id}. Admin will mark this order as paid after confirming your bank transfer.
+                                </p>
+                              )}
+                              {order.paymentMethod === "cod" && (
+                                <p className="text-xs text-[var(--muted-foreground)] mt-3">Pay when the package is delivered.</p>
+                              )}
+                            </div>
+
+                            <div className="rounded-xl border border-[var(--border)] p-4">
+                              <h3 className="text-sm font-bold mb-3">Order status</h3>
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-[var(--muted-foreground)]">Current status</span>
+                                <StatusBadge value={order.status} />
+                              </div>
+                              <div className="mt-4 space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-[var(--muted-foreground)]">Subtotal</span>
+                                  <span>${order.subtotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-[var(--muted-foreground)]">Shipping</span>
+                                  <span>${order.shippingCost.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-[var(--muted-foreground)]">Tax</span>
+                                  <span>${order.tax.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between border-t border-[var(--border)] pt-2 font-bold">
+                                  <span>Total</span>
+                                  <span>${order.total.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
+
+                  {ordersLoading && (
+                    <div className="text-center py-16 bg-[var(--card)] rounded-2xl">
+                      <p className="text-sm text-[var(--muted-foreground)]">Loading orders...</p>
+                    </div>
+                  )}
+
                   {!ordersLoading && orders.length === 0 && (
                     <div className="text-center py-16 bg-[var(--card)] rounded-2xl">
                       <Package size={48} className="text-[var(--border)] mx-auto mb-4" />
@@ -262,7 +407,7 @@ export function AccountDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-                    {wishlist.map((p) => <ProductCard key={p.id} product={p} />)}
+                    {wishlist.map((product) => <ProductCard key={product.id} product={product} />)}
                   </div>
                 )}
               </div>
@@ -276,62 +421,21 @@ export function AccountDashboard() {
                     <Plus size={14} /> Add Address
                   </button>
                 </div>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {[
-                    { type: "Home", name: user.name, address: "123 Fashion Avenue, Apt 4B", city: "New York", state: "NY", zip: "10001", default: true },
-                    { type: "Office", name: user.name, address: "456 Style Street, Floor 12", city: "New York", state: "NY", zip: "10022", default: false },
-                  ].map((addr) => (
-                    <div key={addr.type} className={`bg-[var(--card)] rounded-2xl p-5 border-2 ${addr.default ? "border-[var(--foreground)]" : "border-transparent"}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <MapPin size={14} />
-                          <span className="text-sm font-bold">{addr.type}</span>
-                          {addr.default && <span className="text-xs px-2 py-0.5 bg-[var(--foreground)] text-[var(--background)] rounded-full">Default</span>}
-                        </div>
-                        <button className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">Edit</button>
-                      </div>
-                      <p className="text-sm font-medium">{addr.name}</p>
-                      <p className="text-sm text-[var(--muted-foreground)]">{addr.address}</p>
-                      <p className="text-sm text-[var(--muted-foreground)]">{addr.city}, {addr.state} {addr.zip}</p>
-                      {!addr.default && (
-                        <button onClick={() => toast("Default address updated")} className="mt-3 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] flex items-center gap-1">
-                          <Check size={12} /> Set as Default
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                <div className="bg-[var(--card)] rounded-2xl p-6">
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    Shipping addresses are captured during checkout and shown inside each order detail.
+                  </p>
                 </div>
               </div>
             )}
 
             {tab === "payment" && (
               <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-black">Payment Methods</h2>
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--border)] text-sm font-medium hover:bg-[var(--accent)] transition-colors">
-                    <Plus size={14} /> Add Card
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {[
-                    { type: "Visa", last4: "4892", expiry: "06/28", default: true },
-                    { type: "Mastercard", last4: "3741", expiry: "11/27", default: false },
-                  ].map((card) => (
-                    <div key={card.last4} className={`bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white ${card.default ? "ring-2 ring-white/20" : ""}`}>
-                      <div className="flex justify-between items-start mb-8">
-                        <div>
-                          <span className="text-xs opacity-60">{card.type}</span>
-                          {card.default && <span className="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded-full">Default</span>}
-                        </div>
-                        <CreditCard size={20} className="opacity-60" />
-                      </div>
-                      <p className="text-xl font-mono tracking-widest mb-4">•••• •••• •••• {card.last4}</p>
-                      <div className="flex justify-between text-xs opacity-60">
-                        <span>{user.name.toUpperCase()}</span>
-                        <span>{card.expiry}</span>
-                      </div>
-                    </div>
-                  ))}
+                <h2 className="text-xl font-black mb-6">Payment Methods</h2>
+                <div className="bg-[var(--card)] rounded-2xl p-6">
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    MAEVEN currently supports Bank QR Transfer and Cash on Delivery at checkout.
+                  </p>
                 </div>
               </div>
             )}
@@ -344,19 +448,19 @@ export function AccountDashboard() {
                     { title: "Order Updates", sub: "Shipping, delivery and return notifications", enabled: true },
                     { title: "New Arrivals", sub: "Be first to know about new products", enabled: true },
                     { title: "Price Drops", sub: "Get notified when wishlisted items go on sale", enabled: true },
-                    { title: "Exclusive Offers", sub: "Member-only deals and early access", enabled: false },
                     { title: "Style Recommendations", sub: "Personalised picks from our AI Stylist", enabled: true },
-                    { title: "Weekly Newsletter", sub: "Curated fashion editorial content", enabled: false },
-                  ].map((notif, i) => (
-                    <div key={i} className="flex items-center justify-between p-5">
+                  ].map((notif) => (
+                    <div key={notif.title} className="flex items-center justify-between p-5">
                       <div>
                         <p className="text-sm font-semibold">{notif.title}</p>
                         <p className="text-xs text-[var(--muted-foreground)]">{notif.sub}</p>
                       </div>
-                      <div className={`w-11 h-6 rounded-full transition-all relative cursor-pointer ${notif.enabled ? "bg-[var(--foreground)]" : "bg-[var(--border)]"}`}
-                        onClick={() => toast(`${notif.title} ${notif.enabled ? "disabled" : "enabled"}`)}>
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${notif.enabled ? "left-6" : "left-1"}`} />
-                      </div>
+                      <button
+                        onClick={() => toast(`${notif.title} ${notif.enabled ? "disabled" : "enabled"}`)}
+                        className={`w-11 h-6 rounded-full transition-all relative ${notif.enabled ? "bg-[var(--foreground)]" : "bg-[var(--border)]"}`}
+                      >
+                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${notif.enabled ? "left-6" : "left-1"}`} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -365,16 +469,14 @@ export function AccountDashboard() {
 
             {tab === "settings" && (
               <div className="space-y-6">
-                <h2 className="text-xl font-black">Account Settings</h2>
-                <div className="bg-[var(--card)] rounded-2xl p-6 space-y-5">
-                  <h3 className="font-bold">Personal Information</h3>
+                <div className="bg-[var(--card)] rounded-2xl p-6">
+                  <h2 className="text-xl font-black mb-6">Account Settings</h2>
                   {[
                     { label: "Full Name", value: user.name },
                     { label: "Email Address", value: user.email },
-                    { label: "Phone Number", value: "+1 (555) 423-8917" },
-                    { label: "Date of Birth", value: "September 12, 1992" },
+                    { label: "Membership Tier", value: user.tier },
                   ].map(({ label, value }) => (
-                    <div key={label} className="flex items-center justify-between py-2 border-b border-[var(--border)]">
+                    <div key={label} className="flex items-center justify-between py-3 border-b border-[var(--border)] last:border-0">
                       <div>
                         <p className="text-xs text-[var(--muted-foreground)]">{label}</p>
                         <p className="text-sm font-medium mt-0.5">{value}</p>
@@ -385,24 +487,10 @@ export function AccountDashboard() {
                     </div>
                   ))}
                 </div>
-                <div className="bg-[var(--card)] rounded-2xl p-6 space-y-4">
-                  <h3 className="font-bold">Security</h3>
-                  {[
-                    { label: "Change Password", action: "Update" },
-                    { label: "Two-Factor Authentication", action: "Enable" },
-                  ].map(({ label, action }) => (
-                    <div key={label} className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
-                      <p className="text-sm">{label}</p>
-                      <button className="text-xs font-semibold text-[var(--foreground)] hover:underline">{action}</button>
-                    </div>
-                  ))}
-                </div>
                 <div className="bg-red-50 dark:bg-red-950 rounded-2xl p-6">
-                  <h3 className="font-bold text-red-600 mb-3">Danger Zone</h3>
-                  <p className="text-sm text-[var(--muted-foreground)] mb-4">Permanently delete your account and all data.</p>
-                  <button className="px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition-colors">
-                    Delete Account
-                  </button>
+                  <h3 className="font-bold text-red-600 mb-2">Danger Zone</h3>
+                  <p className="text-sm text-red-600/70 mb-4">Account deletion is not available yet.</p>
+                  <button className="px-4 py-2 border border-red-200 text-red-600 rounded-xl text-sm font-semibold">Delete Account</button>
                 </div>
               </div>
             )}
