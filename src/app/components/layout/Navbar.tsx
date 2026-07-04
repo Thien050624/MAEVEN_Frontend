@@ -6,6 +6,9 @@ import {
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { categories } from "../../data/products";
+import { checkApiHealth } from "../../api/healthApi";
+
+type ApiStatus = "checking" | "online" | "offline";
 
 const navLinks = [
   {
@@ -43,11 +46,34 @@ export function Navbar() {
   const [megaOpen, setMegaOpen] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkBackendConnection = async () => {
+      try {
+        const healthy = await checkApiHealth();
+        if (!cancelled) setApiStatus(healthy ? "online" : "offline");
+      } catch (error) {
+        if (!cancelled) setApiStatus("offline");
+      }
+    };
+
+    setApiStatus("checking");
+    void checkBackendConnection();
+    const intervalId = window.setInterval(checkBackendConnection, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   return (
@@ -149,6 +175,19 @@ export function Navbar() {
               >
                 <Search size={20} />
               </button>
+              <div
+                title={apiStatus === "online" ? "Backend API connected" : apiStatus === "offline" ? "Backend API offline" : "Checking backend API"}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[10px] font-bold tracking-wide ${
+                  apiStatus === "online"
+                    ? "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300"
+                    : apiStatus === "offline"
+                      ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                      : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${apiStatus === "checking" ? "bg-current animate-pulse" : "bg-current"}`} />
+                <span className="hidden sm:inline">API</span>
+              </div>
 
               {/* Dark Mode */}
               <button
