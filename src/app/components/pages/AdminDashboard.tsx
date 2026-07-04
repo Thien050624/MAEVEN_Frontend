@@ -12,6 +12,7 @@ import type { Product } from "../../data/products";
 import type { ProductUpsertPayload } from "../../api/productsApi";
 import { uploadProductImage } from "../../api/cloudinaryApi";
 import { deleteAdminCustomer, fetchAdminCustomers, type AdminCustomerDto } from "../../api/customersApi";
+import { checkApiHealth } from "../../api/healthApi";
 
 const revenueData = [
   { month: "Jan", revenue: 42000, orders: 320 },
@@ -96,6 +97,7 @@ interface ProductEditForm {
 }
 
 type AdminTab = "overview" | "products" | "orders" | "customers";
+type ApiStatus = "checking" | "online" | "offline";
 
 export function AdminDashboard() {
   const { navigate, logout, allProducts, updateProductSale, updateProductDetails, createProduct, deleteProduct, toast, user } = useApp();
@@ -114,6 +116,7 @@ export function AdminDashboard() {
   const [productForm, setProductForm] = useState<ProductEditForm | null>(null);
   const [savingProduct, setSavingProduct] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   
   // Sale Setting State
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
@@ -125,6 +128,28 @@ export function AdminDashboard() {
   const filteredProducts = allProducts.filter((p) => !searchQ || p.name.toLowerCase().includes(searchQ.toLowerCase()) || p.brand.toLowerCase().includes(searchQ.toLowerCase()));
   const totalProductPages = Math.ceil(filteredProducts.length / productsPerPage);
   const currentProducts = filteredProducts.slice((productsPage - 1) * productsPerPage, productsPage * productsPerPage);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkBackendConnection = async () => {
+      try {
+        const healthy = await checkApiHealth();
+        if (!cancelled) setApiStatus(healthy ? "online" : "offline");
+      } catch (error) {
+        if (!cancelled) setApiStatus("offline");
+      }
+    };
+
+    setApiStatus("checking");
+    void checkBackendConnection();
+    const intervalId = window.setInterval(checkBackendConnection, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const [ordersPage, setOrdersPage] = useState(1);
   const ordersPerPage = 5;
@@ -477,7 +502,26 @@ export function AdminDashboard() {
             <h1 className="text-3xl font-black tracking-tight">Admin Dashboard</h1>
             <p className="text-sm text-[var(--muted-foreground)]">Welcome back — here's what's happening today</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+            <div
+              title="Backend API connection status"
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${
+                apiStatus === "online"
+                  ? "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300"
+                  : apiStatus === "offline"
+                    ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                    : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+              }`}
+            >
+              {apiStatus === "online" ? (
+                <CheckCircle size={14} />
+              ) : apiStatus === "offline" ? (
+                <AlertCircle size={14} />
+              ) : (
+                <span className="w-2.5 h-2.5 rounded-full bg-current animate-pulse" />
+              )}
+              {apiStatus === "online" ? "API Connected" : apiStatus === "offline" ? "API Offline" : "Checking API"}
+            </div>
             <button onClick={() => navigate("home")} className="px-4 py-2 text-sm border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors">
               View Store
             </button>
