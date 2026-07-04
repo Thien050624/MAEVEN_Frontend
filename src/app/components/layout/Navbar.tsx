@@ -167,14 +167,6 @@ export function Navbar() {
 
             {/* Right Actions */}
             <div className="flex items-center gap-2 sm:gap-4">
-              {/* Search */}
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="p-2 rounded-xl hover:bg-[var(--accent)] transition-colors text-[var(--foreground)]"
-                aria-label="Search"
-              >
-                <Search size={20} />
-              </button>
               <div
                 title={apiStatus === "online" ? "Backend API connected" : apiStatus === "offline" ? "Backend API offline" : "Checking backend API"}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[10px] font-bold tracking-wide ${
@@ -188,6 +180,15 @@ export function Navbar() {
                 <span className={`w-2 h-2 rounded-full ${apiStatus === "checking" ? "bg-current animate-pulse" : "bg-current"}`} />
                 <span className="hidden sm:inline">API</span>
               </div>
+
+              {/* Search */}
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="p-2 rounded-xl hover:bg-[var(--accent)] transition-colors text-[var(--foreground)]"
+                aria-label="Search"
+              >
+                <Search size={20} />
+              </button>
 
               {/* Dark Mode */}
               <button
