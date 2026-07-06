@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { CheckCircle, AlertCircle, Info } from "lucide-react";
 import { AppProvider, useApp } from "./context/AppContext";
@@ -46,6 +47,78 @@ function ToastNotifications() {
   );
 }
 
+function ApiConnectionNotice() {
+  const [status, setStatus] = useState<"connecting" | "connected" | "hidden">("connecting");
+
+  useEffect(() => {
+    let hideTimer: number | undefined;
+
+    const handleApiOnline = () => {
+      setStatus("connected");
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(() => setStatus("hidden"), 5000);
+    };
+
+    window.addEventListener("maeven-api-online", handleApiOnline);
+
+    return () => {
+      window.removeEventListener("maeven-api-online", handleApiOnline);
+      window.clearTimeout(hideTimer);
+    };
+  }, []);
+
+  return (
+    <AnimatePresence>
+      {status !== "hidden" && (
+        <motion.div
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -16 }}
+          transition={{ duration: 0.25 }}
+          className="fixed left-1/2 top-5 z-[210] w-[calc(100%-2rem)] max-w-md -translate-x-1/2"
+        >
+          <div
+            className={`flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
+              status === "connected"
+                ? "border-green-200 bg-green-50/95 text-green-800 dark:border-green-900 dark:bg-green-950/95 dark:text-green-200"
+                : "border-amber-200 bg-amber-50/95 text-amber-800 dark:border-amber-900 dark:bg-amber-950/95 dark:text-amber-200"
+            }`}
+          >
+            <div
+              className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
+                status === "connected" ? "bg-green-600 text-white" : "bg-amber-500 text-white"
+              }`}
+            >
+              {status === "connected" ? (
+                <CheckCircle size={17} />
+              ) : (
+                <span className="h-2.5 w-2.5 rounded-full bg-current animate-pulse" />
+              )}
+            </div>
+            <div>
+              <div className="mb-0.5 flex items-center gap-2">
+                <span className="text-sm font-black">
+                  {status === "connected" ? "API Connected" : "Đang kết nối dữ liệu"}
+                </span>
+                {status === "connected" && (
+                  <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white">
+                    API
+                  </span>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed opacity-90">
+                {status === "connected"
+                  ? "Kết nối backend đã ổn định. Bạn có thể trải nghiệm MAEVEN bình thường."
+                  : "Hãy đợi giây lát để MAEVEN kết nối dữ liệu ổn định rồi trải nghiệm nhé."}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 const NO_FOOTER_PAGES = ["checkout", "auth", "ai-stylist"];
 
 function AppContent() {
@@ -83,6 +156,7 @@ function AppContent() {
         </motion.main>
       </AnimatePresence>
       {!NO_FOOTER_PAGES.includes(currentPage) && <Footer />}
+      <ApiConnectionNotice />
       <ToastNotifications />
     </div>
   );
@@ -97,4 +171,3 @@ export default function App() {
     </div>
   );
 }
-
