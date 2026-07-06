@@ -98,6 +98,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentPage, setCurrentPage] = useState("home");
   const [pageParams, setPageParams] = useState<Record<string, string>>({});
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [backendDataLoaded, setBackendDataLoaded] = useState(false);
 
   useEffect(() => {
     if (darkMode) {
@@ -358,49 +359,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, 3500);
   };
 
+  const syncBackendData = useCallback(async (options: { showErrorToast?: boolean } = {}) => {
+    const token = localStorage.getItem("maeven_token");
+    if (token) {
+      try {
+        const currentUser = await apiGetMe(token);
+        setUser(currentUser);
+      } catch (error) {
+        console.error("Auto-login failed:", error);
+        localStorage.removeItem("maeven_token");
+        setUser(null);
+      }
+    }
+
+    try {
+      const wishlistToken = localStorage.getItem("maeven_token");
+      const [remoteProducts, remoteWishlist] = await Promise.all([
+        fetchProducts(),
+        wishlistToken ? fetchWishlist(wishlistToken) : Promise.resolve([]),
+      ]);
+
+      setAllProducts(remoteProducts);
+      setWishlist(remoteWishlist);
+      setBackendDataLoaded(true);
+
+      setCartItems((prev) =>
+        prev.map((cartItem) => {
+          const refreshedProduct = remoteProducts.find((product) => product.id === cartItem.product.id);
+          return refreshedProduct ? { ...cartItem, product: refreshedProduct } : cartItem;
+        })
+      );
+    } catch (error) {
+      console.error(error);
+      if (options.showErrorToast) {
+        toast("Could not load products from PostgreSQL", "error");
+      }
+      throw error;
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
     const initializeApp = async () => {
-      // 1. Check Auto-Login first
-      const token = localStorage.getItem("maeven_token");
-      if (token) {
-        try {
-          const currentUser = await apiGetMe(token);
-          if (!cancelled) {
-            setUser(currentUser);
-          }
-        } catch (error) {
-          console.error("Auto-login failed:", error);
-          localStorage.removeItem("maeven_token");
-        }
-      }
-
-      // 2. Load Products and Wishlist
       try {
-        const wishlistToken = localStorage.getItem("maeven_token");
-        const [remoteProducts, remoteWishlist] = await Promise.all([
-          fetchProducts(),
-          wishlistToken ? fetchWishlist(wishlistToken) : Promise.resolve([]),
-        ]);
-        if (cancelled) {
-          return;
-        }
-
-        setAllProducts(remoteProducts);
-        setWishlist(remoteWishlist);
-
-        setCartItems((prev) =>
-          prev.map((cartItem) => {
-            const refreshedProduct = remoteProducts.find((product) => product.id === cartItem.product.id);
-            return refreshedProduct ? { ...cartItem, product: refreshedProduct } : cartItem;
-          })
-        );
+        await syncBackendData({ showErrorToast: true });
       } catch (error) {
-        console.error(error);
-        if (!cancelled) {
-          toast("Could not load products from PostgreSQL", "error");
-        }
+        if (cancelled) return;
       }
     };
 
@@ -409,7 +414,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [syncBackendData]);
+
+  useEffect(() => {
+    let syncing = false;
+
+    const handleApiOnline = async () => {
+      if (backendDataLoaded || syncing) return;
+
+      syncing = true;
+      try {
+        await syncBackendData();
+        toast("Backend connected. Store data updated.", "success");
+      } catch (error) {
+        console.error(error);
+      } finally {
+        syncing = false;
+      }
+    };
+
+    window.addEventListener("maeven-api-online", handleApiOnline);
+    return () => window.removeEventListener("maeven-api-online", handleApiOnline);
+  }, [backendDataLoaded, syncBackendData]);
 
   const navigate = useCallback((page: string, params: Record<string, string> = {}) => {
     setCurrentPage(page);

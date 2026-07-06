@@ -5,5 +5,9 @@ export async function checkApiHealth(): Promise<boolean> {
     cache: "no-store",
   });
 
+  if (response.ok) {
+    window.dispatchEvent(new Event("maeven-api-online"));
+  }
+
   return response.ok;
 }
