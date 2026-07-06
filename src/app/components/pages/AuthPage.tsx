@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Eye, EyeOff, ArrowRight, Check, Mail, Lock, User } from "lucide-react";
 import { useApp } from "../../context/AppContext";
@@ -6,13 +6,95 @@ import authHeroImage from "../../assets/maeven-auth-hero.jpeg";
 
 type AuthMode = "login" | "register" | "forgot" | "otp";
 
+type GoogleCredentialResponse = {
+  credential?: string;
+};
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (options: { client_id: string; callback: (response: GoogleCredentialResponse) => void }) => void;
+          renderButton: (element: HTMLElement, options: Record<string, string | number | boolean>) => void;
+        };
+      };
+    };
+  }
+}
+
 export function AuthPage() {
-  const { login, register, navigate, toast, pageParams } = useApp();
+  const { login, loginWithGoogle, register, navigate, toast, pageParams } = useApp();
   const [mode, setMode] = useState<AuthMode>((pageParams.mode as AuthMode) || "login");
   const [showPassword, setShowPassword] = useState(false);
   const [otpValues, setOtpValues] = useState(["", "", "", "", "", ""]);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
+  const handleGoogleCredential = async (response: GoogleCredentialResponse) => {
+    if (!response.credential) {
+      toast("Google login was cancelled", "info");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const role = await loginWithGoogle(response.credential);
+      if (role === "admin") {
+        toast("Welcome to Admin Dashboard");
+        navigate("admin");
+      } else {
+        toast("Welcome back!");
+        navigate("home");
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (mode !== "login" || !googleClientId || !googleButtonRef.current) return;
+
+    const renderGoogleButton = () => {
+      if (!window.google || !googleButtonRef.current) return;
+
+      googleButtonRef.current.innerHTML = "";
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleCredential,
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        text: "signin_with",
+        shape: "pill",
+        width: 400,
+      });
+    };
+
+    if (window.google) {
+      renderGoogleButton();
+      return;
+    }
+
+    const scriptId = "google-identity-services";
+    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
+    if (!script) {
+      script = document.createElement("script");
+      script.id = scriptId;
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+
+    script.addEventListener("load", renderGoogleButton);
+    return () => script?.removeEventListener("load", renderGoogleButton);
+  }, [mode, googleClientId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,6 +230,18 @@ export function AuthPage() {
                 <div>
                   <h1 className="text-3xl font-black mb-2">Welcome back</h1>
                   <p className="text-[var(--muted-foreground)] text-sm mb-8">Sign in to your MAEVEN account. (Hint: Use <strong>admin@maeven.com</strong> for Admin Access)</p>
+
+                  {googleClientId && (
+                    <>
+                      <div ref={googleButtonRef} className="mb-6 min-h-[44px] flex justify-center" />
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="flex-1 h-px bg-[var(--border)]" />
+                        <span className="text-xs text-[var(--muted-foreground)]">or continue with email</span>
+                        <div className="flex-1 h-px bg-[var(--border)]" />
+                      </div>
+                    </>
+                  )}
+
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                       <label className="text-sm font-medium mb-1.5 block">Email</label>

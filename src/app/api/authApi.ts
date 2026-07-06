@@ -23,6 +23,21 @@ export async function login(email: string, password: string): Promise<AuthRespon
   return response.json();
 }
 
+export async function loginWithGoogle(idToken: string): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Google login failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function register(name: string, email: string, password: string): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: "POST",

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { products as initialProducts, type Product } from "../data/products";
 import { createProduct as apiCreateProduct, deleteProduct as apiDeleteProduct, fetchProducts, fetchWishlist, toggleWishlistItem as apiToggleWishlistItem, updateProduct as apiUpdateProduct, updateProductSale as apiUpdateProductSale, type ProductUpsertPayload } from "../api/productsApi";
-import { login as apiLogin, register as apiRegister, getMe as apiGetMe, logout as apiLogout, updateMe as apiUpdateMe } from "../api/authApi";
+import { login as apiLogin, loginWithGoogle as apiLoginWithGoogle, register as apiRegister, getMe as apiGetMe, logout as apiLogout, updateMe as apiUpdateMe } from "../api/authApi";
 
 export interface CartItem {
   product: Product;
@@ -45,6 +45,7 @@ interface AppContextType {
   user: User | null;
   isLoggedIn: boolean;
   login: (email: string, password: string) => Promise<"admin" | "user">;
+  loginWithGoogle: (idToken: string) => Promise<"admin" | "user">;
   logout: () => void;
   register: (name: string, email: string, password: string) => Promise<User>;
   updateProfile: (payload: { name: string; avatar: string }) => Promise<User>;
@@ -292,6 +293,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const loginWithGoogle = async (idToken: string) => {
+    try {
+      const data = await apiLoginWithGoogle(idToken);
+      localStorage.setItem("maeven_token", data.token);
+      setUser(data.user);
+      setWishlist(await fetchWishlist(data.token));
+      return data.user.role;
+    } catch (error: any) {
+      toast(error?.message || "Google login failed", "error");
+      throw error;
+    }
+  };
+
   const logout = () => {
     const token = localStorage.getItem("maeven_token");
     if (token) {
@@ -410,7 +424,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         allProducts, updateProductSale, updateProductDetails, createProduct, deleteProduct,
         cartItems, addToCart, removeFromCart, updateCartQty, cartCount, cartTotal, clearCart,
         wishlist, toggleWishlist, isWishlisted,
-        user, isLoggedIn: !!user, login, logout, register, updateProfile,
+        user, isLoggedIn: !!user, login, loginWithGoogle, logout, register, updateProfile,
         searchQuery, setSearchQuery, recentSearches, addRecentSearch,
         darkMode, toggleDarkMode,
         toast, notifications,
