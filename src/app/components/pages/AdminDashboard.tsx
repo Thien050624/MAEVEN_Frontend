@@ -128,6 +128,13 @@ export function AdminDashboard() {
   const filteredProducts = allProducts.filter((p) => !searchQ || p.name.toLowerCase().includes(searchQ.toLowerCase()) || p.brand.toLowerCase().includes(searchQ.toLowerCase()));
   const totalProductPages = Math.ceil(filteredProducts.length / productsPerPage);
   const currentProducts = filteredProducts.slice((productsPage - 1) * productsPerPage, productsPage * productsPerPage);
+  const adminNavItems: Array<{ id: AdminTab; label: string; icon: typeof BarChart3; description: string }> = [
+    { id: "overview", label: "Overview", icon: BarChart3, description: "Revenue and activity" },
+    { id: "products", label: "Products", icon: Package, description: `${allProducts.length} items` },
+    { id: "orders", label: "Orders", icon: ShoppingCart, description: `${orders.length} orders` },
+    { id: "customers", label: "Customers", icon: Users, description: `${customers.length} accounts` },
+  ];
+  const activeTabLabel = adminNavItems.find((item) => item.id === tab)?.label ?? "Overview";
 
   useEffect(() => {
     let cancelled = false;
@@ -495,11 +502,69 @@ export function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-10">
+      <div className="flex min-h-screen flex-col lg:flex-row">
+        <aside className="lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:flex-shrink-0 border-b lg:border-b-0 lg:border-r border-[var(--border)] bg-[var(--card)]">
+          <div className="flex h-full flex-col gap-5 p-4 lg:p-6">
+            <div className="flex items-center justify-between lg:block">
+              <button onClick={() => navigate("home")} className="text-2xl font-black tracking-tighter">
+                MAEVEN
+              </button>
+              <span className="rounded-full bg-[var(--accent)] px-3 py-1 text-[10px] font-bold tracking-widest text-[var(--muted-foreground)] lg:mt-3 lg:inline-block">
+                ADMIN
+              </span>
+            </div>
+
+            <div className="hidden rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4 lg:block">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--muted-foreground)]">Signed in as</p>
+              <p className="mt-2 truncate text-sm font-bold">{user?.name ?? "Admin"}</p>
+              <p className="truncate text-xs text-[var(--muted-foreground)]">{user?.email}</p>
+            </div>
+
+            <nav className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+              {adminNavItems.map(({ id, label, icon: Icon, description }) => (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setTab(id);
+                    setSearchQ("");
+                  }}
+                  className={`relative flex min-w-max items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors lg:min-w-0 ${
+                    tab === id
+                      ? "bg-[var(--foreground)] text-[var(--background)]"
+                      : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="flex flex-col">
+                    <span className="text-sm font-bold">{label}</span>
+                    <span className={`hidden text-xs lg:block ${tab === id ? "opacity-75" : "text-[var(--muted-foreground)]"}`}>
+                      {description}
+                    </span>
+                  </span>
+                  {tab === id && (
+                    <motion.span layoutId="adminSidebarActive" className="absolute right-3 hidden h-2 w-2 rounded-full bg-current lg:block" />
+                  )}
+                </button>
+              ))}
+            </nav>
+
+            <div className="mt-auto hidden space-y-3 lg:block">
+              <button onClick={() => navigate("home")} className="w-full rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--accent)]">
+                View Store
+              </button>
+              <button onClick={handleLogout} className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                <LogOut size={14} /> Sign out
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:py-10">
+          <div className="mx-auto max-w-[1200px]">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-black tracking-tight">Admin Dashboard</h1>
+            <h1 className="text-3xl font-black tracking-tight">{activeTabLabel}</h1>
             <p className="text-sm text-[var(--muted-foreground)]">Welcome back — here's what's happening today</p>
           </div>
           <div className="flex items-center gap-3">
@@ -522,34 +587,13 @@ export function AdminDashboard() {
               )}
               {apiStatus === "online" ? "API Connected" : apiStatus === "offline" ? "API Offline" : "Checking API"}
             </div>
-            <button onClick={() => navigate("home")} className="px-4 py-2 text-sm border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors">
+            <button onClick={() => navigate("home")} className="px-4 py-2 text-sm border border-[var(--border)] rounded-xl hover:bg-[var(--accent)] transition-colors lg:hidden">
               View Store
             </button>
-            <button onClick={handleLogout} className="px-4 py-2 text-sm rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-2 font-semibold">
+            <button onClick={handleLogout} className="px-4 py-2 text-sm rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-2 font-semibold lg:hidden">
               <LogOut size={14} /> Sign out
             </button>
           </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-[var(--border)] mb-8">
-          {(["overview", "products", "orders", "customers"] as AdminTab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => {
-                setTab(t);
-                setSearchQ("");
-              }}
-              className={`px-5 py-3 text-sm font-medium capitalize transition-colors relative ${
-                tab === t ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-              }`}
-            >
-              {t}
-              {tab === t && (
-                <motion.div layoutId="adminTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--foreground)]" />
-              )}
-            </button>
-          ))}
         </div>
 
         {tab === "overview" && (
@@ -1128,6 +1172,9 @@ export function AdminDashboard() {
             </div>
           </div>
         )}
+
+          </div>
+        </main>
 
         {(editingProduct || isAddingProduct) && productForm && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4 py-8">
