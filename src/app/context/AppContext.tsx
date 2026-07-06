@@ -425,7 +425,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       syncing = true;
       try {
         await syncBackendData();
-        toast("Backend connected. Store data updated.", "success");
       } catch (error) {
         console.error(error);
       } finally {

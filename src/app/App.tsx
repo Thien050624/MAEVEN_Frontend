@@ -48,12 +48,19 @@ function ToastNotifications() {
 }
 
 function ApiConnectionNotice() {
-  const [status, setStatus] = useState<"connecting" | "connected" | "hidden">("connecting");
+  const hasShownConnected = sessionStorage.getItem("maeven_api_connected_notice_seen") === "true";
+  const [status, setStatus] = useState<"connecting" | "connected" | "hidden">(hasShownConnected ? "hidden" : "connecting");
 
   useEffect(() => {
     let hideTimer: number | undefined;
 
     const handleApiOnline = () => {
+      if (sessionStorage.getItem("maeven_api_connected_notice_seen") === "true") {
+        setStatus("hidden");
+        return;
+      }
+
+      sessionStorage.setItem("maeven_api_connected_notice_seen", "true");
       setStatus("connected");
       window.clearTimeout(hideTimer);
       hideTimer = window.setTimeout(() => setStatus("hidden"), 5000);

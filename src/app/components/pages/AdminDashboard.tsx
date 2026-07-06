@@ -108,6 +108,7 @@ export function AdminDashboard() {
   const [orderSearchQ, setOrderSearchQ] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("All");
   const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderDto | null>(null);
   const [customers, setCustomers] = useState<AdminCustomerDto[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearchQ, setCustomerSearchQ] = useState("");
@@ -953,7 +954,11 @@ export function AdminDashboard() {
                 </thead>
                 <tbody>
                   {currentOrders.map((order) => (
-                    <tr key={order.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)] transition-colors">
+                    <tr
+                      key={order.id}
+                      onClick={() => setSelectedOrder(order)}
+                      className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)] transition-colors cursor-pointer"
+                    >
                       <td className="px-5 py-4 text-sm font-mono font-semibold">{order.id}</td>
                       <td className="px-5 py-4 text-sm">
                         <p className="font-medium">{order.customerName}</p>
@@ -970,6 +975,7 @@ export function AdminDashboard() {
                           </span>
                           <select
                             value={order.paymentStatus}
+                            onClick={(event) => event.stopPropagation()}
                             onChange={(event) => handleOrderStatusChange(order.id, "paymentStatus", event.target.value)}
                             className="block w-36 px-2.5 py-1.5 border border-[var(--border)] rounded-lg text-xs bg-[var(--background)] outline-none"
                           >
@@ -986,6 +992,7 @@ export function AdminDashboard() {
                           </span>
                           <select
                             value={order.status}
+                            onClick={(event) => event.stopPropagation()}
                             onChange={(event) => handleOrderStatusChange(order.id, "status", event.target.value)}
                             className="block w-32 px-2.5 py-1.5 border border-[var(--border)] rounded-lg text-xs bg-[var(--background)] outline-none"
                           >
@@ -998,20 +1005,30 @@ export function AdminDashboard() {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => saveOrderStatus(order)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              saveOrderStatus(order);
+                            }}
                             disabled={savingOrderId === order.id}
                             className="px-3 py-1.5 rounded-lg bg-[var(--foreground)] text-[var(--background)] text-xs font-semibold disabled:opacity-60"
                           >
                             {savingOrderId === order.id ? "Saving..." : "Save"}
                           </button>
                           <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedOrder(order);
+                            }}
                             title={order.items.map((item) => `${item.quantity}x ${item.productName}`).join("\n")}
                             className="p-1.5 rounded-lg hover:bg-[var(--background)] text-[var(--muted-foreground)]"
                           >
                             <Eye size={14} />
                           </button>
                           <button
-                            onClick={() => handleDeleteOrder(order)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteOrder(order);
+                            }}
                             className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
                           >
                             <Trash2 size={14} />
@@ -1175,6 +1192,119 @@ export function AdminDashboard() {
 
           </div>
         </main>
+
+        {selectedOrder && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4 py-8">
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--background)] shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-6 py-4">
+                <div>
+                  <h2 className="text-xl font-black">Order Detail</h2>
+                  <p className="text-xs text-[var(--muted-foreground)] font-mono">{selectedOrder.id}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedOrder(null)}
+                  className="p-2 rounded-xl hover:bg-[var(--accent)]"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid gap-6 p-6 lg:grid-cols-[1.4fr_0.9fr]">
+                <section className="space-y-4">
+                  <div className="rounded-2xl border border-[var(--border)] p-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="font-bold">Purchased Products</h3>
+                      <span className="text-xs text-[var(--muted-foreground)]">{selectedOrder.items.length} item types</span>
+                    </div>
+                    <div className="space-y-3">
+                      {selectedOrder.items.map((item) => (
+                        <div key={`${item.productId}-${item.size}-${item.color}`} className="flex gap-3 rounded-xl bg-[var(--accent)] p-3">
+                          <img src={item.productImage} alt={item.productName} className="h-20 w-16 rounded-lg object-cover bg-[var(--background)]" />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm">{item.productName}</p>
+                            <p className="text-xs text-[var(--muted-foreground)]">Product ID: {item.productId}</p>
+                            <p className="text-xs text-[var(--muted-foreground)]">Size: {item.size} · Color: {item.color}</p>
+                            <p className="text-xs text-[var(--muted-foreground)]">Qty: {item.quantity}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold">${(item.unitPrice * item.quantity).toFixed(2)}</p>
+                            <p className="text-xs text-[var(--muted-foreground)]">${item.unitPrice.toFixed(2)} each</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--border)] p-4">
+                    <h3 className="mb-3 font-bold">Shipping Address</h3>
+                    <div className="space-y-1 text-sm">
+                      <p className="font-semibold">{selectedOrder.shippingAddress.firstName} {selectedOrder.shippingAddress.lastName}</p>
+                      <p>{selectedOrder.shippingAddress.address}</p>
+                      <p className="text-[var(--muted-foreground)]">{selectedOrder.shippingAddress.country}</p>
+                      <p className="text-[var(--muted-foreground)]">{selectedOrder.shippingAddress.phone}</p>
+                      <p className="text-[var(--muted-foreground)]">{selectedOrder.shippingAddress.email}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <aside className="space-y-4">
+                  <div className="rounded-2xl border border-[var(--border)] p-4">
+                    <h3 className="mb-3 font-bold">Customer</h3>
+                    <p className="text-sm font-semibold">{selectedOrder.customerName}</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">{selectedOrder.customerEmail}</p>
+                    <p className="mt-2 text-xs font-mono text-[var(--muted-foreground)]">{selectedOrder.userId}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--border)] p-4">
+                    <h3 className="mb-3 font-bold">Status</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${statusColors[selectedOrder.status] ?? "bg-zinc-100 text-zinc-700"}`}>
+                        {selectedOrder.status}
+                      </span>
+                      <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${paymentStatusColors[selectedOrder.paymentStatus] ?? "bg-zinc-100 text-zinc-700"}`}>
+                        {selectedOrder.paymentStatus}
+                      </span>
+                    </div>
+                    <div className="mt-4 space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-[var(--muted-foreground)]">Payment</span>
+                        <span className="font-semibold">{selectedOrder.paymentMethod === "qr" ? "Bank QR Transfer" : "Cash on Delivery"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--muted-foreground)]">Delivery</span>
+                        <span className="font-semibold capitalize">{selectedOrder.deliveryMethod}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--muted-foreground)]">Created</span>
+                        <span className="font-semibold">{new Date(selectedOrder.createdAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--border)] p-4">
+                    <h3 className="mb-3 font-bold">Totals</h3>
+                    <div className="space-y-2 text-sm">
+                      {[
+                        ["Subtotal", selectedOrder.subtotal],
+                        ["Shipping", selectedOrder.shippingCost],
+                        ["Tax", selectedOrder.tax],
+                      ].map(([label, value]) => (
+                        <div key={label as string} className="flex justify-between">
+                          <span className="text-[var(--muted-foreground)]">{label as string}</span>
+                          <span>${(value as number).toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between border-t border-[var(--border)] pt-3 text-base font-black">
+                        <span>Total</span>
+                        <span>${selectedOrder.total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        )}
 
         {(editingProduct || isAddingProduct) && productForm && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4 py-8">
